@@ -1,0 +1,13 @@
+# OS files
+.DS_Store
+
+# Metrics data (safety net — actual data lives at ~/.claude/metrics/)
+*.jsonl
+
+# Claude Code plans (local only)
+.claude/plans/
+
+# Worktree artifacts (top-level workspace directories only)
+/workspace-*/
+
+/presentations/!_deployment-manifests/**

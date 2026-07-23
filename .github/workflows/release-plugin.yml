@@ -1,0 +1,170 @@
+name: Release Plugin
+
+on:
+  workflow_dispatch:
+    inputs:
+      plugin:
+        description: 'Plugin to release'
+        required: true
+        default: 'sdlc'
+        type: string
+      bump:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-plugin-${{ github.event.inputs.plugin || 'merge' }}
+  cancel-in-progress: false
+
+jobs:
+  # Stage 1: Manual trigger — bump version and create release PR
+  create-release-pr:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Validate plugin exists
+        run: |
+          PLUGIN="${{ inputs.plugin }}"
+          if [ ! -f "plugins/${PLUGIN}/.claude-plugin/plugin.json" ]; then
+            echo "::error::Plugin '${PLUGIN}' not found at plugins/${PLUGIN}/.claude-plugin/plugin.json"
+            exit 1
+          fi
+
+      - name: Detect changes since last release
+        run: |
+          PLUGIN="${{ inputs.plugin }}"
+          LAST_TAG=$(git tag -l "${PLUGIN}-v*" --sort=-version:refname | head -1)
+
+          if [ -z "$LAST_TAG" ]; then
+            echo "No previous release tag found for ${PLUGIN}. This will be the initial release."
+            exit 0
+          fi
+
+          echo "Last release tag: ${LAST_TAG}"
+          CHANGED_FILES=$(git diff --name-only "${LAST_TAG}..HEAD" -- "plugins/${PLUGIN}/")
+
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "::error::No changes detected in plugins/${PLUGIN}/ since ${LAST_TAG}"
+            exit 1
+          fi
+
+          echo "Changed files since ${LAST_TAG}:"
+          echo "$CHANGED_FILES"
+
+      - name: Bump version
+        id: bump
+        run: |
+          chmod +x .github/scripts/bump-plugin-version.sh
+          .github/scripts/bump-plugin-version.sh "${{ inputs.plugin }}" "${{ inputs.bump }}"
+
+      - name: Create version bump PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PLUGIN="${{ inputs.plugin }}"
+          NEW_VERSION="${{ steps.bump.outputs.new_version }}"
+          BRANCH="release/${PLUGIN}-v${NEW_VERSION}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add "plugins/${PLUGIN}/.claude-plugin/plugin.json" ".claude-plugin/marketplace.json"
+          git commit -m "release: ${PLUGIN} v${NEW_VERSION}"
+          git push origin "$BRANCH"
+
+          PR_URL=$(gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "release: ${PLUGIN} v${NEW_VERSION}" \
+            --body "Automated version bump from \`${{ steps.bump.outputs.old_version }}\` to \`${NEW_VERSION}\`. Merge this PR to trigger tagging and GitHub Release creation." \
+            --label "release")
+
+          echo "::notice::Release PR created: ${PR_URL}"
+          echo "::notice::Merge the PR to trigger tagging and release."
+
+  # Stage 2: On merge — tag and create GitHub Release
+  tag-and-release:
+    if: >
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.title, 'release:') &&
+      !startsWith(github.event.pull_request.title, 'release: mcp')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Parse release info from PR title
+        id: parse
+        run: |
+          TITLE="${{ github.event.pull_request.title }}"
+          PLUGIN=$(echo "$TITLE" | sed -E 's/^release: ([^ ]+) v.+$/\1/')
+          VERSION=$(echo "$TITLE" | sed -E 's/^release: [^ ]+ v(.+)$/\1/')
+
+          if [ -z "$PLUGIN" ] || [ -z "$VERSION" ]; then
+            echo "::error::Could not parse plugin and version from PR title: ${TITLE}"
+            exit 1
+          fi
+
+          echo "plugin=${PLUGIN}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${PLUGIN}-v${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Create tag
+        run: |
+          TAG="${{ steps.parse.outputs.tag }}"
+          MERGE_SHA="${{ github.event.pull_request.merge_commit_sha }}"
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "::error::Tag ${TAG} already exists"
+            exit 1
+          fi
+
+          git tag "$TAG" "$MERGE_SHA"
+          git push origin "$TAG"
+
+      - name: Find previous release tag
+        id: prev
+        run: |
+          TAG="${{ steps.parse.outputs.tag }}"
+          PLUGIN="${{ steps.parse.outputs.plugin }}"
+          LAST_TAG=$(git tag -l "${PLUGIN}-v*" --sort=-version:refname | grep -vFx "$TAG" | head -1)
+          echo "last_tag=${LAST_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.parse.outputs.tag }}"
+          PLUGIN="${{ steps.parse.outputs.plugin }}"
+          VERSION="${{ steps.parse.outputs.version }}"
+          LAST_TAG="${{ steps.prev.outputs.last_tag }}"
+
+          NOTES_FLAGS="--generate-notes"
+          if [ -n "$LAST_TAG" ]; then
+            NOTES_FLAGS="--generate-notes --notes-start-tag ${LAST_TAG}"
+          fi
+
+          gh release create "$TAG" \
+            --title "${PLUGIN} v${VERSION}" \
+            $NOTES_FLAGS \
+            --target "${{ github.event.pull_request.merge_commit_sha }}"

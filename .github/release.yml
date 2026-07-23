@@ -1,0 +1,30 @@
+changelog:
+  exclude:
+    labels:
+      - release
+    authors:
+      - copilot-pull-request-reviewer
+  categories:
+    - title: New Skills & Agents
+      labels:
+        - skill
+        - agent
+    - title: Improvements
+      labels:
+        - enhancement
+        - improvement
+    - title: Bug Fixes
+      labels:
+        - bug
+        - fix
+    - title: CI/CD & Infrastructure
+      labels:
+        - ci
+        - infrastructure
+    - title: Documentation
+      labels:
+        - documentation
+        - docs
+    - title: Other Changes
+      labels:
+        - "*"
