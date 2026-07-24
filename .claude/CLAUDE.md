@@ -79,11 +79,11 @@ If inconsistencies or gaps are found, report them to the user and ask how they'd
 
 - Notion, Linear, and Figma are Claude built-in OAuth integrations — NOT in `.mcp.json`.
 - One custom MCP is bundled in `plugins/sdlc/.mcp.json`: Playwright (~150 MB browser download on first use). Snyk is configured globally in `~/.claude.json` (not in `.mcp.json`) by `/sdlc-workspace-init` using the direct binary path.
-- `security-agent` uses Snyk MCP tools (`snyk_trust`, `snyk_code_scan`, `snyk_sca_scan`, `snyk_iac_scan`). Snyk setup (install, auth, MCP entry, permissions) is handled entirely by `/sdlc-workspace-init` — the agent SKIPs and directs the user there if Snyk is unavailable. SCA folder trust is established at first scan time via `snyk_trust` (opens browser for approval). It is spawned by `sdlc-implement-task` after the Test Agent PASS.
+- `security-agent` uses Snyk MCP tools (`snyk_trust`, `snyk_code_scan`, `snyk_sca_scan`, `snyk_iac_scan`). Snyk setup (install, auth, MCP entry, permissions) is handled entirely by `/sdlc-workspace-init` — the agent SKIPs and directs the user there if Snyk is unavailable. SCA folder trust is established at first scan time via `snyk_trust` (opens browser for approval). It is spawned by `sdlc-implement-task` after the Test Agent PASS, but only if the user opts in — the skill asks on every run whether to scan.
 - Releasing: `release-plugin.yml` (manual trigger creates PR; on merge tags + publishes, tags follow `sdlc-v<semver>`).
 - Four skills spawn `skill-retrospective` agent at the end: `generate-scoping-doc`, `generate-jotdown`, `generate-data-ui-inventory`, `implement-task`.
 - Validation gates in `generate-jotdown` and `generate-task-breakdown` block on `TBD`, `NEEDS HUMAN INPUT`, or unresolved `OQ-x` in source docs.
-- `sdlc-implement-task` orchestrates sub-agents only; it does NOT write code itself. Branch format: `ai/<issue-id>-<slugified-title>`. Pipeline order: Coding Agent → Test Agent → Security Agent → Documentator Agent → Commit.
+- `sdlc-implement-task` orchestrates sub-agents only; it does NOT write code itself. Branch format: `ai/<issue-id>-<slugified-title>`. Pipeline order: Coding Agent → Test Agent → Security Agent (optional — user is asked each run) → Documentator Agent → Commit. The commit always carries a `Security:` trailer, including `SKIPPED — scan declined by user`.
 
 ## Lessons Learned
 
