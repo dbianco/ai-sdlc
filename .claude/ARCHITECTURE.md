@@ -18,7 +18,7 @@ Each skill is a markdown file with YAML frontmatter defining a structured proced
 | `sdlc-generate-data-ui-inventory` | Generates a frontend component/payload inventory in Notion |
 | `sdlc-generate-jotdown` | Generates a self-sufficient Jot Down Implementation Spec from any source (Scoping Doc, Linear issue, Slack thread, or free text) |
 | `sdlc-generate-task-breakdown` | Decomposes a Jot Down into PERT-sequenced Linear issues |
-| `sdlc-implement-task` | Orchestrates Coding → Test → Security → Documentator agents to implement a Linear issue |
+| `sdlc-implement-task` | Orchestrates Coding → Test → Security (optional, user-confirmed) → Documentator agents to implement a Linear issue |
 | `sdlc-init-claude-context` | Spawns `codebase-scanner` agents to generate `CLAUDE.md`/`ARCHITECTURE.md` for workspace repos |
 | `sdlc-workspace-sync` | Runs `workspace-sync.sh` to git-pull all workspace repos |
 
@@ -28,7 +28,7 @@ Each skill is a markdown file with YAML frontmatter defining a structured proced
 |-------|-------|------|
 | `coding-agent` | opus | Implements code changes + tests from a Linear issue |
 | `test-agent` | opus | Quality gate: runs tests, checks coverage, writes missing tests, reports PASS/FAIL |
-| `security-agent` | sonnet | Security gate: classifies changed files, runs targeted Snyk scans (SAST/SCA/IaC), auto-remediates findings, documents FPs, reports PASS/PASS-WITH-FP/FAIL/SKIPPED |
+| `security-agent` | sonnet | Optional security gate (user opts in per run): classifies changed files, runs targeted Snyk scans (SAST/SCA/IaC), auto-remediates findings, documents FPs, reports PASS/PASS-WITH-FP/FAIL/SKIPPED |
 | `documentator-agent` | opus | Updates inline docs, API specs, README, CHANGELOG after tests pass |
 | `codebase-scanner` | sonnet | Scans a repo and generates `CLAUDE.md` + `ARCHITECTURE.md` |
 | `skill-retrospective` | haiku | Reflects on a skill run, proposes 2 lessons, saves to CLAUDE.md with user approval |
@@ -66,7 +66,8 @@ sdlc-implement-task (orchestrator)
   ├─ Coding Agent     → writes code + unit tests to branch
   ├─ Test Agent       → runs suite, checks coverage, reports PASS/FAIL
   │   └─ (FAIL) → Coding Agent (up to 3 iterations)
-  ├─ Security Agent   → classifies files, runs Snyk SAST/SCA/IaC scans,
+  ├─ Security Agent   → OPTIONAL: user is asked each run whether to scan
+  │   │                 classifies files, runs Snyk SAST/SCA/IaC scans,
   │   │                 auto-remediates findings (up to 3 cycles),
   │   │                 documents false positives with inline suppressions
   │   └─ (FAIL) → user decides: fix manually / accept risk / abort

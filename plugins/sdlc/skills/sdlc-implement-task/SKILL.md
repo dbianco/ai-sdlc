@@ -1,14 +1,14 @@
 ---
 name: sdlc-implement-task
-description: Implement a Linear issue by orchestrating the Coding, Test, Security, and Documentator agents
+description: Implement a Linear issue by orchestrating the Coding, Test, optional Security, and Documentator agents
 disable-model-invocation: true
 ---
 
 # /sdlc-implement-task
 
 Implement a Linear issue by orchestrating the Coding Agent, Test Agent,
-Security Agent, and Documentator Agent. This is the entry point for the
-autonomous coding loop.
+Security Agent (optional — the user is asked each run), and Documentator
+Agent. This is the entry point for the autonomous coding loop.
 
 ## Input
 
@@ -90,7 +90,19 @@ $ARGUMENTS — A Linear issue identifier (e.g. `YAL-123`).
      Coding Agent Task for iteration. Maximum 3 iteration cycles.
      If still failing after 3 cycles, report to user and abort.
 
-11. **Spawn the Security Agent** as a sub-agent via Task:
+11. **Ask whether to run the Security Agent.** The security scan is optional
+    and the user decides on every run. Present using `AskUserQuestion`:
+    - **Context**: the number of files modified by the Coding Agent, and the
+      list of those files.
+
+    Ask: "Run the Security Agent (Snyk scan) on these changes?"
+    Options:
+    - "Yes, run the scan" — continue to step 11a.
+    - "No, skip it" — record the security status as
+      `SKIPPED — scan declined by user` and go directly to step 12. Do NOT
+      spawn the Security Agent.
+
+11a. **Spawn the Security Agent** as a sub-agent via Task:
 
     Pass to the Security Agent:
     - The exact list of files modified by the Coding Agent
@@ -116,6 +128,11 @@ $ARGUMENTS — A Linear issue identifier (e.g. `YAL-123`).
     - **SKIPPED**: proceed to step 12 with a warning note for the commit
       message: `Security scan was skipped — Snyk not configured.`
 
+    There are two distinct skip reasons. Keep them separate everywhere they
+    are reported so a declined scan is never mistaken for a broken setup:
+    - `SKIPPED — scan declined by user` (step 11, user chose "No, skip it")
+    - `SKIPPED — Snyk not configured` (Security Agent returned SKIPPED)
+
 12. **Spawn the Documentator Agent** as a sub-agent via Task:
 
     Pass to the Documentator Agent:
@@ -134,15 +151,19 @@ $ARGUMENTS — A Linear issue identifier (e.g. `YAL-123`).
 
     <bullet summary of changes>
 
-    Security: <PASS|PASS-WITH-FP|FAIL|SKIPPED> — <N findings remediated, M FPs documented, 'unresolved findings — see report', or 'scan skipped'>"
+    Security: <PASS|PASS-WITH-FP|FAIL|SKIPPED> — <N findings remediated, M FPs documented, 'unresolved findings — see report', 'scan declined by user', or 'Snyk not configured'>"
     ```
     Follow the repo's commit convention from CLAUDE.md if one exists.
-    Always include the `Security:` trailer line from the Security Agent report.
+    Always include the `Security:` trailer line — from the Security Agent
+    report when it ran, or `Security: SKIPPED — scan declined by user` when
+    the user skipped it at step 11. The trailer is never omitted, so every
+    commit records whether the code was scanned.
 
 14. **Report to the user:**
     - Summary of changes made
     - Test results (pass/fail counts, coverage)
-    - Security scan results (status, findings remediated, FPs documented)
+    - Security scan results (status, findings remediated, FPs documented) —
+      or a note that the scan was skipped at the user's request
     - Files modified (list)
     - Number of iteration cycles needed
     - Ready for human review: `git diff main..HEAD`
@@ -161,8 +182,8 @@ $ARGUMENTS — A Linear issue identifier (e.g. `YAL-123`).
     - **Skill name**: `sdlc-implement-task`
     - **What was built**: the Linear issue ID, title, and branch name
     - **Run summary**: number of Coding/Test Agent iteration cycles needed,
-      test results (pass/fail/coverage), security scan status and finding
-      counts, files modified count, any safety boundary concerns, any user
+      test results (pass/fail/coverage), whether the user opted into the
+      security scan and its status and finding counts, files modified count, any safety boundary concerns, any user
       corrections or pushback during the run
     - **Workspace config**: the repository list from `.claude/settings.local.json`
 
