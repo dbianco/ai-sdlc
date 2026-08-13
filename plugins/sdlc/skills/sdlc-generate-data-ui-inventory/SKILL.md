@@ -6,21 +6,31 @@ disable-model-invocation: true
 
 # /sdlc-generate-data-ui-inventory
 
-Generate a Data UI Inventory document in Notion. This artifact catalogs every
+Generate a Data UI Inventory document. This artifact catalogs every
 UI component, its data payloads, library dependencies, and implementation tasks
 for a feature's frontend. It is produced after the Scoping Doc and is consumed
 by the Jot Down and task breakdown skills.
 
 ## Input
 
-$ARGUMENTS — A Notion URL or page ID pointing to an existing PRD.
+$ARGUMENTS — In `remote` mode, a Notion URL or page ID pointing to an existing
+PRD. In `local` mode, a feature reference — `001`, `order-export`, or
+`001-order-export`. A Figma link is required in both modes.
 
 ## Procedure
+
+0. **Resolve the artifact store.** Read `sdlc.mode` from
+   `.claude/settings.local.json` (absent means `remote`). Read
+   `${CLAUDE_PLUGIN_ROOT}/references/artifact-store.md` and use the
+   implementation for that mode for every artifact operation named below.
+   Never call Notion or Linear directly.
 
 1. **Load `.claude/settings.local.json`** from the project root. Read the `sdlc` config key,
    including Notion config (`docs_database`) and the list of allowed repositories.
 
-2. **Verify MCP permissions.** Before doing any work, check both integrations:
+2. **Verify MCP permissions.** Check Figma in both modes — it is required for
+   this skill regardless of where artifacts live. Check Notion only when
+   `sdlc.mode` is `remote`. In `local` mode, skip the Notion check entirely.
 
    **Notion:** Fetch the configured `home_directory` page using `notion-fetch`.
    If the fetch fails or returns an access error:
@@ -43,8 +53,10 @@ $ARGUMENTS — A Notion URL or page ID pointing to an existing PRD.
    If either check fails, list all failures together so the user can fix
    them in one pass.
 
-3. **Fetch the PRD** from Notion using the MCP. Read it completely. Also look
-   for a linked Scoping Document and fetch it if one exists.
+3. **Read the PRD.** Call `resolve_feature($ARGUMENTS)`, then
+   `read_doc(feature, prd)`. Read it completely. Also call
+   `read_doc(feature, scoping-doc)` — if it exists, read it for milestone and
+   architecture context; if not, continue without it.
 
 4. **Validate that the PRD and Scoping Doc (if present) are complete.** Scan
    both documents for any sections that require human intervention. Check for
@@ -75,7 +87,11 @@ $ARGUMENTS — A Notion URL or page ID pointing to an existing PRD.
      including the exact marker text and its location.
    - Tell the user: "The source documents have unresolved items that must be
      completed before a Data UI Inventory can be generated. Please resolve
-     them in Notion and re-run this skill."
+     them and re-run this skill." In `remote` mode, direct them to resolve
+     the items in Notion — the PRD and Scoping Doc pages fetched in step 3.
+     In `local` mode, direct them to the doc files instead —
+     `doc_link(feature, prd)` and `doc_link(feature, scoping-doc)` (typically
+     `<feature-dir>/prd.md` and `<feature-dir>/scoping-doc.md`).
    - **STOP. Do NOT proceed.** Do not generate a partial inventory.
 
    **If only non-blocking items exist:**
@@ -107,9 +123,10 @@ $ARGUMENTS — A Notion URL or page ID pointing to an existing PRD.
    - Routing patterns
    - Project structure conventions
 
-7. **If a Data UI Inventory template is configured** in `.claude/settings.local.json`
-   (`templates.data_ui_inventory`), fetch it from Notion and use its structure
-   as the authoritative layout. Otherwise, use the default structure below.
+7. **If a Data UI Inventory template is configured and `sdlc.mode` is
+   `remote`**, fetch it from Notion (`templates.data_ui_inventory` in
+   `.claude/settings.local.json`) and use its structure as the authoritative
+   layout. Otherwise, use the default structure below.
 
 8. **Generate the Data UI Inventory** with the following structure:
 
@@ -118,7 +135,10 @@ $ARGUMENTS — A Notion URL or page ID pointing to an existing PRD.
    ### Title: Data UI Inventory — <Feature Name>
 
    ### References
-   Callout block with links to: PRD | Scoping Doc | Figma Design File
+   In `remote` mode, a Notion callout block with links to: PRD | Scoping Doc |
+   Figma Design File. In `local` mode, a bullet list with the same links,
+   using `doc_link(feature, prd)` and `doc_link(feature, scoping-doc)` for the
+   doc links.
 
    ### Author / Date / Status: Draft
 
@@ -162,8 +182,9 @@ $ARGUMENTS — A Notion URL or page ID pointing to an existing PRD.
    - A heading with the screen/state name
    - The Figma node ID in parentheses for traceability
 
-   Use collapsible/toggle sections to keep the document navigable.
-   Cover at minimum:
+   Use collapsible/toggle sections (Notion toggle blocks in `remote` mode;
+   `<details>`/`<summary>` blocks in `local` mode markdown) to keep the
+   document navigable. Cover at minimum:
    - Default / initial state
    - Primary flow (main interaction sequence)
    - Loading states
@@ -179,7 +200,9 @@ $ARGUMENTS — A Notion URL or page ID pointing to an existing PRD.
 
    ### 4. Component Inventory
 
-   Create an **inline Notion database** with the following columns:
+   Define the following columns for the Component Inventory — created as an
+   **inline Notion database** in `remote` mode (step 10), or rendered as a
+   markdown table with the same columns in `local` mode:
 
    | Column | Type | Description |
    |--------|------|-------------|
@@ -189,13 +212,13 @@ $ARGUMENTS — A Notion URL or page ID pointing to an existing PRD.
    | Status | Status | Not started / In progress / Done |
    | Assignee | Person | Developer responsible |
 
-   Populate the database with every component identified from the Figma
+   Populate the inventory with every component identified from the Figma
    design. Components should be organized hierarchically:
    - Top-level layout components first (e.g. MainLayout, PageHeader)
    - Then child components grouped by their parent
    - Leaf components (buttons, inputs, labels) as children of their container
 
-   For each component in the database, name it matching the Figma layer
+   For each component in the inventory, name it matching the Figma layer
    name where possible, converted to PascalCase.
 
    ---
@@ -265,7 +288,14 @@ $ARGUMENTS — A Notion URL or page ID pointing to an existing PRD.
 
    ---
 
-9. **Create the Notion page.** Title format: `Data UI Inventory: <Feature Name>`.
+9. **Write the Data UI Inventory.** Call
+   `write_doc(feature, data-ui-inventory, <content>)`.
+
+   In `remote` mode this creates the Notion page titled
+   `Data UI Inventory: <Feature Name>`. In `local` mode it writes
+   `.sdlc/features/NNN-slug/data-ui-inventory.md`.
+
+   **Remote mode — page properties:**
 
    **If `docs_database` is configured** (non-empty in `.claude/settings.local.json`):
    Create the page as an entry in the SDLC Documents database with these
@@ -278,22 +308,28 @@ $ARGUMENTS — A Notion URL or page ID pointing to an existing PRD.
    **If `docs_database` is empty:** Fall back to creating a flat page under
    the configured `home_directory`.
 
-10. **Create the inline Components database** on the page using the Notion
-    MCP `create-database` tool with the schema defined in section 4.
+10. **Create the Components database — `remote` mode only.** Skip in `local`
+    mode: render the component inventory as a markdown table inside the
+    document instead, using the same columns. A markdown table carries the same
+    information for downstream skills, which read the inventory as text.
 
-11. **Return the Notion page URL** to the user.
+11. **Return the artifact reference** to the user — the Notion page URL in
+    `remote` mode, or the path returned by `write_doc` in `local` mode.
 
 ---
 
 ### Retrospective
 
-12. **Spawn the Skill Retrospective Agent.** After the Notion page is created
-    and URL returned, spawn a sub-agent using the instructions in
-    `${CLAUDE_PLUGIN_ROOT}/agents/skill-retrospective.md`.
+12. **Spawn the Skill Retrospective Agent.** After the Data UI Inventory is
+    written and its artifact reference returned — the Notion page in `remote`
+    mode, or the file in `local` mode — spawn a sub-agent using the
+    instructions in `${CLAUDE_PLUGIN_ROOT}/agents/skill-retrospective.md`.
 
     Pass to the agent:
     - **Skill name**: `sdlc-generate-data-ui-inventory`
-    - **What was built**: the Data UI Inventory title and Notion URL
+    - **What was built**: the Data UI Inventory title and its artifact
+      reference — the Notion URL in `remote` mode, or the file path in
+      `local` mode
     - **Run summary**: number of components cataloged, Figma extraction quality,
       payload definitions that needed user input, open questions identified,
       any user corrections or pushback during the run
@@ -311,9 +347,9 @@ $ARGUMENTS — A Notion URL or page ID pointing to an existing PRD.
   so that designers and engineers share the same vocabulary.
 - Payload interfaces must use concrete types, not `any`. If a type cannot be
   determined, use `unknown` and add an Open Question.
-- The Component Inventory database is the source of truth for tracking
-  implementation progress. Every UI component that needs to be built must
-  have a row in this database.
+- The Component Inventory (a Notion database in `remote` mode, a markdown
+  table in `local` mode) is the source of truth for tracking implementation
+  progress. Every UI component that needs to be built must have a row in it.
 - Tasks in Section 7 are a lightweight planning aid. The authoritative task
   breakdown happens downstream via `/sdlc-generate-task-breakdown`.
 - This document must be detailed enough that an engineer can look at a

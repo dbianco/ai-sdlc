@@ -1,14 +1,16 @@
 ---
 name: sdlc-generate-prd
-description: Generate a Product Requirements Document in Notion from a feature description
+description: Generate a Product Requirements Document from a feature description
 disable-model-invocation: true
 ---
 
 # /sdlc-generate-prd
 
-Generate a Product Requirements Document in Notion under the workspace's
-configured home directory. The PRD follows TextraAI's standard 11-section template
-with numbered IDs for cross-referencing in engineering workflows.
+Generate a Product Requirements Document from a feature description. In
+`remote` mode it is created as a Notion page under the workspace's configured
+home directory; in `local` mode it is written to `.sdlc/features/`. The PRD
+follows TextraAI's standard 11-section template with numbered IDs for
+cross-referencing in engineering workflows.
 
 ## Input
 
@@ -17,10 +19,18 @@ Can be a few sentences or a detailed brief.
 
 ## Procedure
 
+0. **Resolve the artifact store.** Read `sdlc.mode` from
+   `.claude/settings.local.json` (absent means `remote`). Read
+   `${CLAUDE_PLUGIN_ROOT}/references/artifact-store.md` and use the
+   implementation for that mode for every artifact operation named below.
+   Never call Notion or Linear directly.
+
 1. **Load `.claude/settings.local.json`** from the project root. Read the `sdlc` config key,
    including Notion `home_directory`, `docs_database`, and `templates.prd` values.
 
-2. **Verify Notion permissions.** Before doing any work, test that the Notion
+2. **Verify Notion permissions — `remote` mode only.** Skip this step entirely
+   when `sdlc.mode` is `local`; there is nothing to authorize. In `remote`
+   mode, before doing any work, test that the Notion
    MCP can both read and write to the configured `home_directory`. Fetch the
    home directory page using `notion-fetch`. If the fetch fails or returns an
    access error:
@@ -30,9 +40,13 @@ Can be a few sentences or a detailed brief.
      access to the target page."
    - **STOP.** Do not proceed until permissions are confirmed.
 
-3. **If a PRD template is configured**, fetch it from Notion using the MCP and
+3. **If a PRD template is configured and `sdlc.mode` is `remote`**, fetch it
+   from Notion using the MCP and
    use its structure as the authoritative layout. Otherwise, use the default
    structure defined in step 5 below.
+
+   In `local` mode there is no configured template — use the structure defined
+   in step 5 of this procedure. Do not create a template file.
 
 4. **Ask clarifying questions** before generating. Gather enough information to
    fill every mandatory section. At minimum, ask about:
@@ -72,7 +86,7 @@ Can be a few sentences or a detailed brief.
 5. **Generate the PRD** with this structure. Every item that gets an ID must
    use the specified prefix and sequential numbering (G-1, G-2, ...; NG-1;
    US-01, US-02, ...; REQ-01; V-01; OQ-1). IDs are mandatory — they enable
-   traceability across Linear tickets, scoping docs, and design reviews.
+   traceability across downstream tasks, scoping docs, and design reviews.
 
    ---
 
@@ -256,7 +270,20 @@ Can be a few sentences or a detailed brief.
    Bulleted list: external dependencies, internal blockers, required decisions
    (reference OQ IDs where applicable).
 
-6. **Create the Notion page.** Title format: `PRD: <Feature Name>`.
+6. **Write the PRD.** Call `new_feature(<feature name>)` to allocate the
+   feature, then `write_doc(feature, prd, <content>)`.
+
+   In `remote` mode `new_feature` creates nothing by itself — it only binds the
+   feature name that titles the page `write_doc` then creates. This skill does
+   not touch Linear at all: no project, no issue. Linear enters the pipeline
+   only at `/sdlc-generate-task-breakdown`.
+
+   In `remote` mode this creates the Notion page titled `PRD: <Feature Name>`
+   with the properties described below. In `local` mode it writes
+   `.sdlc/features/NNN-slug/prd.md` and no properties are needed — the
+   directory name carries the feature identity.
+
+   **Remote mode — page properties:**
 
    **If `docs_database` is configured** (non-empty in `.claude/settings.local.json`):
    Create the page as an entry in the SDLC Documents database with these
@@ -270,7 +297,8 @@ Can be a few sentences or a detailed brief.
    **If `docs_database` is empty:** Fall back to creating a flat page under
    the configured `home_directory`.
 
-   When creating the page, use Notion's enhanced markdown format to produce:
+   **In `remote` mode**, when creating the page, use Notion's enhanced
+   markdown format to produce:
    - Callout blocks for the usage instructions, context box, and business case
      warning (matching the template's callout styles)
    - Tables with header rows for all structured data (Customer Pipeline, Goals,
@@ -280,7 +308,8 @@ Can be a few sentences or a detailed brief.
    - Checkbox lists for acceptance criteria in the Requirements section
    - Bold formatting for requirement IDs and user story IDs
 
-7. **Return the Notion page URL** to the user.
+7. **Return the artifact reference** to the user — the Notion page URL in
+   `remote` mode, or the path returned by `write_doc` in `local` mode.
 
 ## ID Numbering Reference
 
@@ -308,7 +337,7 @@ Can be a few sentences or a detailed brief.
   explicitly note the omission so downstream consumers know it was a deliberate
   decision.
 - All IDs must be sequential within their section and never reused. These IDs
-  are referenced by the scoping doc, jot down, and Linear task breakdown skills.
+  are referenced by the scoping doc, jot down, and task breakdown skills.
 - Tables are preferred over prose for structured data. Use prose only for
   narrative sections (Problem Statement, Business Case narratives).
 - Acceptance criteria in Requirements (Section 8) must be checkbox items so they

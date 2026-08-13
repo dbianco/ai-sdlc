@@ -1,55 +1,84 @@
 ---
 name: sdlc-generate-task-breakdown
-description: Generate Linear issues with PERT sequencing from a Jot Down, Scoping Doc, and Data UI Inventory
+description: Generate a sequenced task breakdown with PERT estimates from a Jot Down, Scoping Doc, and Data UI Inventory
 disable-model-invocation: true
 ---
 
 # /sdlc-generate-task-breakdown
 
-Generate Linear issues with PERT sequencing from a Jot Down Implementation
-Spec, enriched by the Scoping Doc and Data UI Inventory.
+Generate a sequenced task breakdown with PERT estimates from a Jot Down
+Implementation Spec, enriched by the Scoping Doc and Data UI Inventory. In
+`remote` mode the tasks are created as Linear issues; in `local` mode they are
+written as task files under the feature's `tasks/` directory.
 
 ## Input
 
-$ARGUMENTS — A Notion URL or page ID pointing to an existing Jot Down document.
+$ARGUMENTS — In `remote` mode, a Notion URL or page ID pointing to an existing
+Jot Down. In `local` mode, a feature reference — `001`, `order-export`, or
+`001-order-export`.
 
 ## Procedure
 
+0. **Resolve the artifact store.** Read `sdlc.mode` from
+   `.claude/settings.local.json` (absent means `remote`). Read
+   `${CLAUDE_PLUGIN_ROOT}/references/artifact-store.md` and use the
+   implementation for that mode for every artifact operation named below.
+   Never call Notion or Linear directly.
+
 1. **Load `.claude/settings.local.json`** from the project root. Read the `sdlc` config key,
-   including the Linear team name and safety boundaries (`max_files_per_pr`,
+   including the repository list, the Linear team name (`remote` mode only),
+   and safety boundaries (`max_files_per_pr`,
    `max_lines_per_pr`). These limits constrain the maximum size of any single
    task — defaults are 20 files and 500 lines if not configured.
 
-2. **Ask the user which Linear project to use.** Use the Linear MCP to list
-   available projects for the team (`mcp__claude_ai_Linear__list_projects`). Present the
-   project names to the user via `AskUserQuestion` and let them pick one.
-   All issues created by this skill MUST belong to the selected project.
-   Do NOT proceed until the user has selected a project.
+2. **Read the source documents.** Call `resolve_feature($ARGUMENTS)`, then
+   `read_doc` for each kind: `jotdown` (required — stop if absent),
+   `scoping-doc`, `prd`, and `data-ui-inventory` (each optional; continue
+   without any that are missing, noting the omission).
 
-3. **Map milestones to Linear project milestones.** Use the Linear MCP to
-   list milestones for the selected project (`mcp__claude_ai_Linear__list_milestones`).
+   In `remote` mode, follow the reference links inside the Jot Down to reach the
+   Scoping Doc and PRD, as before. For the Data UI Inventory, search for one
+   linked from the PRD or Scoping Doc, or search Notion for one matching the
+   feature name.
 
-   - If the Jot Down covers a specific milestone from the Scoping Doc, ask
-     the user which Linear milestone to assign issues to.
-   - If the Linear project has no milestones yet, create them from the
-     Scoping Doc milestones using `mcp__claude_ai_Linear__save_milestone`. Ask the
-     user to confirm before creating.
-   - Every issue created by this skill MUST be assigned to a milestone.
+   Use each document for what it carries:
+   - **Jot Down** — the primary input.
+   - **Scoping Doc** — milestone context, architectural decisions, affected
+     services, and risk mitigations.
+   - **PRD** — requirements (REQ-xx), user stories (US-xx), validation rules
+     (V-xx), and acceptance criteria.
+   - **Data UI Inventory** — component inventory, payloads, and frontend task
+     decomposition. If absent, skip frontend-specific decomposition from this
+     source.
 
-4. **Fetch all source documents** from Notion via MCP:
-   - **Jot Down** — the primary input (from $ARGUMENTS)
-   - **Scoping Doc** — follow the reference link in the Jot Down. Use it for
-     milestone context, architectural decisions, affected services, and
-     risk mitigations.
-   - **PRD** — follow the reference link. Use it for requirements (REQ-xx),
-     user stories (US-xx), validation rules (V-xx), and acceptance criteria.
-   - **Data UI Inventory** (if it exists) — search for a Data UI Inventory
-     linked from the PRD or Scoping Doc, or search Notion for one matching
-     the feature name. Use it for component inventory, payloads, and
-     frontend task decomposition. If not found, skip frontend-specific
-     decomposition from this source.
+   In `local` mode a single `jotdown.md` may cover several milestones, each
+   under its own `### Milestone N of M` heading. Read the whole file and treat
+   each such section as a milestone's scope — do not assume one file per
+   milestone.
 
-5. **Validate that all source documents are complete.** Scan all documents
+3. **Establish task grouping.** Call `select_grouping()`. This runs after the
+   documents are read because that is where the milestone names come from.
+
+   In `remote` mode this lists Linear projects via
+   `mcp__claude_ai_Linear__list_projects` and requires the user to pick one via
+   `AskUserQuestion`, then lists milestones for that project via
+   `mcp__claude_ai_Linear__list_milestones` and maps or creates them:
+
+   - If the Jot Down covers a specific milestone from the Scoping Doc, ask the
+     user which Linear milestone to assign issues to.
+   - If the Linear project has no milestones yet, create them from the Scoping
+     Doc milestones using `mcp__claude_ai_Linear__save_milestone`. Ask the user
+     to confirm before creating.
+
+   Every issue must belong to a project and a milestone. Do not proceed until
+   both are chosen.
+
+   In `local` mode there is no project and no picker. Take the milestone names
+   from the source documents and stamp each task's `milestone:` field. If the
+   documents define no milestones, use a single milestone named after the
+   feature. Ask the user nothing.
+
+4. **Validate that all source documents are complete.** Scan all documents
    for any sections that require human intervention. Check for ALL of the
    following markers in each document:
    - `⚠️ NEEDS HUMAN INPUT` or `NEEDS HUMAN INPUT`
@@ -82,15 +111,17 @@ $ARGUMENTS — A Notion URL or page ID pointing to an existing Jot Down document
      including the exact marker text and its location.
    - Tell the user: "The source documents have unresolved items that must be
      completed before a task breakdown can be generated. Please resolve them
-     in Notion and re-run this skill."
-   - **STOP. Do NOT proceed.** Do not create any Linear issues.
+     and re-run this skill." Name the file path in `local` mode, or the Notion
+     page in `remote` mode.
+   - **STOP. Do NOT proceed.** Do not create any tasks — no Linear issues in
+     `remote` mode, no task files in `local` mode.
 
    **If only non-blocking items exist:**
    - List them in an "Acknowledged TBDs (non-blocking)" section so the user
      is aware.
    - **Proceed** with generation.
 
-6. **Decompose into implementable tasks.** Use ALL available source documents:
+5. **Decompose into implementable tasks.** Use ALL available source documents:
 
    - **Jot Down** — primary source for backend tasks: database changes, API
      endpoints, service interactions, deployment stages.
@@ -111,7 +142,7 @@ $ARGUMENTS — A Notion URL or page ID pointing to an existing Jot Down document
    - Self-contained: it can be implemented, tested, and reviewed independently
    - Clearly scoped: an engineer (or coding agent) can start without ambiguity
 
-7. **For each task, define:**
+6. **For each task, define:**
    - **Title**: Verb-first, concise (e.g. "Add `status` field to Order model")
    - **Description**: What to implement, with references to the source
      document and section. Include specific file paths, function names, and
@@ -119,7 +150,8 @@ $ARGUMENTS — A Notion URL or page ID pointing to an existing Jot Down document
      reference the component name, parent, and library components.
    - **Implements**: The upstream requirement IDs this task satisfies —
      `REQ-xx`, `US-xx`, and `V-xx` from the PRD. Write them as a literal
-     line in the issue description:
+     line in the task description — the Linear issue body in `remote` mode,
+     the task file body in `local` mode:
 
      ```
      Implements: REQ-03, US-02, V-07
@@ -134,7 +166,8 @@ $ARGUMENTS — A Notion URL or page ID pointing to an existing Jot Down document
    - **Files**: The exact paths the task is expected to create or modify,
      relative to the repository root (e.g. `internal/orders/model.go`,
      `apps/menu/src/components/OrderStatus.tsx`). Best-effort is fine — this
-     is what makes the task reviewable and lets step 8 detect file collisions.
+     is what makes the task reviewable and lets the sequencing step detect
+     file collisions.
      Use a directory path only when the exact filename genuinely cannot be
      known yet, and say why.
    - **Acceptance criteria**: Testable conditions for "done". Pull from
@@ -149,12 +182,16 @@ $ARGUMENTS — A Notion URL or page ID pointing to an existing Jot Down document
    - **Dependencies**: Which other tasks must be completed first.
    - **Repository**: Which repo from `.claude/settings.local.json` this task belongs to.
    - **Labels**: `ai-sdlc`, plus language label (e.g. `golang`, `typescript`).
-   - **Milestone**: Which Linear milestone this task belongs to (from step 3).
+   - **Milestone**: Which milestone this task belongs to (from the task
+     grouping step) — a
+     Linear milestone in `remote` mode, the `milestone:` front-matter value in
+     `local` mode.
 
-8. **Sequence the tasks** using dependency order. Identify the critical path.
-   Group tasks by their Linear milestone.
+7. **Sequence the tasks** using dependency order. Identify the critical path.
+   Group tasks by their milestone.
 
-   Then resolve file collisions using the **Files** list from step 7. Any two
+   Then resolve file collisions using the **Files** list from the task
+   definition step. Any two
    tasks that touch the same file MUST be sequenced, never marked `[P]` —
    either give one a dependency on the other, or merge them if the split was
    artificial. Two agents editing one file in parallel produce conflicting
@@ -162,43 +199,81 @@ $ARGUMENTS — A Notion URL or page ID pointing to an existing Jot Down document
    inconsistency this breakdown exists to prevent.
 
    Strip `[P]` from any task that fails this check, and report the collisions
-   you resolved in step 11.
+   you resolved in the report step.
 
-9. **Create a parent Linear issue** in the configured team **and project**:
-   - Title: `[Feature Name] — Implementation`
-   - Description: Summary with links to all source documents (Jot Down,
-     Scoping Doc, PRD, and Data UI Inventory if available).
-   - Label: `ai-sdlc`, `epic`
-   - Project: The project selected by the user in step 2.
-   - Milestone: The milestone from step 3.
+8. **Map requirement coverage.** Before creating anything, map every
+   requirement stated in the PRD — each `REQ-xx`, `US-xx`, and `V-xx` — to the
+   tasks that implement it, reading each task's `Implements:` line. This
+   produces one table, built once here and used twice: written into the epic
+   in `local` mode, and presented to the user in the report step.
 
-10. **Create sub-issues** under the parent for each task, using the Linear MCP.
-    Set dependencies between issues based on the sequencing.
-    Every sub-issue MUST include:
-    - `project` — the project selected in step 2.
-    - `milestone` — the Linear milestone mapped in step 3.
+   | Requirement | Covered by | Notes |
+   | ----------- | ---------- | ----- |
+   | REQ-03      | YAL-124, YAL-127 | |
+   | US-05       | — | no task created |
+
+   Identify tasks in the **Covered by** column the way the current mode names
+   them:
+
+   - In `local` mode the composite task id (e.g. `001-002`) is assigned here,
+     following the order fixed by the sequencing step. The whole table is
+     therefore known before a single file is written, which is what lets the
+     epic carry it.
+   - In `remote` mode Linear assigns the identifier (e.g. `YAL-124`) only when
+     the issue is created, so **Covered by** is completed in the task-creation
+     step below. The Linear epic carries links to the source documents, not
+     this table — unchanged from before.
+
+   Follow the table with two explicit counts: **requirements with no task**
+   and **tasks with no requirement** (`Implements: INFRA` does not count as
+   unmapped). Both should be zero. If either is non-zero, list the offenders
+   by ID and tell the user which side needs fixing — a missing task means the
+   breakdown is incomplete, a missing requirement means the PRD is.
+
+9. **Create the epic.** Call `create_epic(feature)`.
+
+   In `remote` mode this creates the parent Linear issue titled
+   `[Feature Name] — Implementation`, labelled `ai-sdlc` and `epic`, in the
+   configured team and in the selected project and milestone, with links to
+   all source documents.
+
+   In `local` mode it writes `tasks/README.md` containing: the feature name, a
+   link to each source document via `doc_link`, the ordered task list with
+   dependencies, the critical path, and the requirement coverage table from
+   the coverage step.
+
+10. **Create each task.** Call `create_task(feature, task)` per task.
+
+    In `remote` mode this creates a Linear sub-issue under the parent created
+    in the epic step, carrying `project` and `milestone`, with dependencies set
+    from the sequencing. Once Linear has assigned the issue identifiers, use
+    them to complete the **Covered by** column of the coverage table.
+
+    In `local` mode it writes `tasks/<NNN>-<slug>.md` using the task file format
+    in the artifact store contract — front matter carrying `id`, `title`,
+    `status`, `milestone`, `repository`, `depends_on`, `implements`, `files`,
+    `parallelizable`, `estimate`, and `labels`. Every field defined there is
+    required except `depends_on`, `parallelizable`, and `labels`. The
+    `Implements:` line becomes the `implements:` front-matter list, and the
+    expected file list becomes `files:`; `[P]` becomes `parallelizable: true`.
+    Every newly created task file starts at `status: todo` — `/sdlc-implement-task`
+    reads that field to resolve dependencies, so it must be present and correct
+    from the moment the file is written.
 
 11. **Report to the user:**
-    - Total number of issues created, grouped by milestone
+    - Total number of tasks created, grouped by milestone
     - Critical path and estimated timeline (using PERT expected values)
-    - Link to the parent Linear issue
+    - The artifact reference for the epic — the parent Linear issue URL in
+      `remote` mode, the path to `tasks/README.md` in `local` mode
     - Any tasks where you were uncertain about scope or estimates
-    - **Requirement coverage table** — one row per `REQ-xx`, `US-xx`, and
-      `V-xx` found in the PRD:
-
-      | Requirement | Covered by | Notes |
-      | ----------- | ---------- | ----- |
-      | REQ-03      | YAL-124, YAL-127 | |
-      | US-05       | — | no task created |
-
-      Follow the table with two explicit counts: **requirements with no
-      task** and **tasks with no requirement** (`Implements: INFRA` does not
-      count as unmapped). Both should be zero. If either is non-zero, list
-      the offenders by ID and tell the user which side needs fixing — a
-      missing task means the breakdown is incomplete, a missing requirement
-      means the PRD is.
-    - **File collisions resolved** in step 8, if any: which tasks shared a
-      file and how you sequenced them.
+    - **Requirement coverage table** — the table built in the coverage step,
+      now complete in both modes, together with its two counts:
+      **requirements with no task** and **tasks with no requirement**. Present
+      it here in full even in `local` mode, where the epic also carries it —
+      the user should not have to open a file to see whether anything went
+      unmapped.
+    - **File collisions resolved** in the sequencing step, if any: which tasks
+      shared a file and how you sequenced them.
 
 ## Task Decomposition Rules
 
@@ -209,7 +284,7 @@ $ARGUMENTS — A Notion URL or page ID pointing to an existing Jot Down document
 - Never create a task that spans multiple repositories.
 - Split along file boundaries wherever the work allows it. A split that leaves
   two tasks editing the same file has not reduced the risk of the work, it has
-  only hidden it behind two issue IDs.
+  only hidden it behind two task IDs.
 
 ## Important
 
@@ -218,7 +293,7 @@ $ARGUMENTS — A Notion URL or page ID pointing to an existing Jot Down document
 - The `Implements:` line is read downstream: `/sdlc-implement-task` passes it to
   the Coding Agent, which reports back which requirement each change satisfies.
   Keep the IDs exact — a typo breaks the trace silently.
-- The validation in step 5 ensures no "NEEDS HUMAN INPUT" sections reach task
+- The validation step ensures no "NEEDS HUMAN INPUT" sections reach task
   creation. If validation was somehow bypassed, STOP and re-run validation.
 - Estimate honestly. A 2-hour optimistic / 40-hour pessimistic task is a sign
   the task needs to be broken down further.
