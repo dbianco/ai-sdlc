@@ -39,12 +39,28 @@ No arguments required. This skill is a guided wizard.
 
      Write the answer to `sdlc.mode` as `"remote"` or `"local"` respectively.
 
-0.3. **Recommend local mode when the tools are unreachable.** Before asking,
-     attempt the Linear and Notion checks described in Phase 5. If either
-     fails, present **Local files** as the recommended option and say why:
-     "Notion and/or Linear are not reachable from this session, so remote mode
-     cannot be configured right now. Local mode works immediately and needs no
-     accounts."
+0.3. **Recommend local mode only on evidence of an actual reachability
+     failure — never on absence of configuration.** Before asking, check
+     whether `sdlc.linear.team` and `sdlc.notion.home_directory` already
+     hold real (non-placeholder) values in `.claude/settings.local.json`,
+     using the same placeholder rules as Phase 1.2. If the file or either
+     key does not exist yet, that also counts as "not yet configured."
+
+     - **If either value is missing or still a placeholder** (the normal
+       first-run case): do NOT probe anything — nothing is configured yet,
+       so a reachability check would tell you nothing. Present the two
+       options neutrally: "Nothing is configured yet. Local files work
+       immediately with no accounts; Notion + Linear needs a Notion
+       workspace and a Linear team you can point me at."
+
+     - **Only if both `linear.team` and `notion.home_directory` already
+       hold real values**, attempt the Linear and Notion checks described
+       in Phase 5. If either fails, present **Local files** as the
+       recommended option and say precisely which one failed — e.g.
+       "Linear is configured but not reachable from this session," or
+       "Notion is configured but not reachable from this session." Never
+       state or imply that a tool is unreachable when the true condition is
+       that it is unconfigured.
 
      Never silently choose for the user — recommend, then let them answer.
 
