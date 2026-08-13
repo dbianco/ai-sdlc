@@ -44,7 +44,7 @@ Linear issue identifier.
 | `read_task(ref)` | Locate the task file by composite id or path; parse front-matter and body | Linear `get_issue` |
 | `update_task_status(ref, status)` | Rewrite the `status:` front-matter field in place, leaving everything else byte-identical | Update the Linear issue status |
 | `create_epic(feature)` | Write `<feature-dir>/tasks/README.md` — the index holding sequencing, critical path, and the requirement coverage table | Create the Linear parent issue |
-| `select_grouping()` | Return the milestone name to stamp into each task's `milestone:` field. Ask the user only if the source documents define milestones | Prompt for the Linear project, then map or create milestones |
+| `select_grouping()` | Return the milestone name to stamp into each task's `milestone:` field. Take the names from the source documents. If the documents define no milestones, use a single milestone named after the feature. Ask the user nothing | Prompt for the Linear project, then map or create milestones |
 
 ## Local layout
 
@@ -120,6 +120,8 @@ Every case resolves toward asking or reporting. Never guess.
 | Condition | Behavior |
 | --------- | -------- |
 | `.sdlc/` missing in local mode | Create it; not an error |
+| `write_doc` target already exists | Report the existing path and ask before overwriting. Never overwrite silently |
+| `new_feature` slug already taken | Reuse the existing directory when the ref clearly names the same feature; otherwise allocate the next free number and say which directory you chose |
 | Feature ref matches nothing | List `.sdlc/features/` contents and ask |
 | Feature or task ref is ambiguous | Ask |
 | Unknown `status:` value | Treat as `todo`, warn, do not rewrite the file |
