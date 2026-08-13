@@ -2,6 +2,8 @@
 
 A Claude Code plugin (`sdlc`) providing an AI-powered SDLC pipeline — from PRD generation through implementation. Distributed via the Claude Code plugin marketplace (`TextraAI-sdlc`). No build system, test runner, or CI for the repo itself.
 
+> **Mirror file.** `AGENTS.md` and `.claude/CLAUDE.md` hold identical content — the same repo knowledge served to different agents (`AGENTS.md` for Codex, `.claude/CLAUDE.md` for Claude Code). Edit both, or neither. Never find-and-replace product names or paths between them: the paths below (`.claude-plugin/`, `~/.claude.json`, `.claude/settings.local.json`) are literal names on disk, not references to whichever agent is reading.
+
 ## Tech Stack
 
 Markdown + YAML frontmatter (skills/agents), Bash (scripts/hooks), JSON (manifests/config) for the plugin. TypeScript + Node 22 for services under `services/`.
