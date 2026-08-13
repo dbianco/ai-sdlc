@@ -24,6 +24,7 @@ Markdown + YAML frontmatter (skills/agents), Bash (scripts/hooks), JSON (manifes
 |------|---------|
 | `plugins/sdlc/skills/*/SKILL.md` | 10 slash commands (each a markdown + YAML file) |
 | `plugins/sdlc/agents/*.md` | 6 sub-agents spawned by skills |
+| `plugins/sdlc/domain-skills/*.md` | 5 domain knowledge docs injected into the Coding Agent prompt by `sdlc-implement-task` (not slash commands) |
 | `plugins/sdlc/scripts/` | Bash scripts (`workspace-sync.sh`) |
 | `plugins/sdlc/hooks/hooks.json` | Lifecycle event hooks (currently empty) |
 | `plugins/sdlc/.mcp.json` | Playwright MCP server (only MCP bundled here; Snyk is global via `~/.claude.json`) |

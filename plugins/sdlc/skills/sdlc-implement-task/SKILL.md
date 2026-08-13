@@ -24,7 +24,25 @@ $ARGUMENTS — A Linear issue identifier (e.g. `YAL-123`).
    - Parent issue (for broader context)
    - Sub-issues (list them with their status)
    - Dependencies (ensure they are completed — abort if not)
-   - Labels (to identify target repository and language)
+   - Labels (to identify target repository, language, and domain)
+
+   After reading labels, build an initial `domain_skills` candidate list by
+   matching labels against the mapping table in
+   `${CLAUDE_PLUGIN_ROOT}/domain-skills/README.md`:
+
+   | Label match                              | Add to `domain_skills`       |
+   | ---------------------------------------- | ---------------------------- |
+   | `golang`, `go`, `go-service`             | `golang.md`                  |
+   | `frontend`, `react`, `web-app`           | `frontend-react.md`          |
+   | `design`, `ui-design`                    | `frontend-design.md`         |
+   | `backend`, `node`, `api`, `express`      | `backend-node.md`            |
+   | `accessibility`, `web-design`, `audit`   | `web-design-audit.md`        |
+
+   If no labels match, also scan the issue title and description for keywords
+   (`goroutine`, `gRPC` → `golang.md`; `component`, `suspense`, `MUI` →
+   `frontend-react.md`; `controller`, `Prisma`, `Zod` → `backend-node.md`;
+   `design`, `aesthetic`, `visual` → `frontend-design.md`). Keyword matches are
+   lower-confidence — only use them if no label signal exists.
 
 3. **Confirm with the user** before proceeding. Present a summary using
    `AskUserQuestion`:
@@ -50,6 +68,17 @@ $ARGUMENTS — A Linear issue identifier (e.g. `YAL-123`).
    `.claude/ARCHITECTURE.md` (if they exist). If `.claude/CLAUDE.md` does
    not exist, check for a legacy `CLAUDE.md` at the repository root.
 
+   While reading CLAUDE.md, parse the `## Tech Stack` section (if present).
+   For each indicator found, add to `domain_skills` if not already present:
+
+   | CLAUDE.md indicator                              | Add to `domain_skills`  |
+   | ------------------------------------------------ | ----------------------- |
+   | `Language: Go`                                   | `golang.md`             |
+   | `Language: TypeScript` + `Framework: React`      | `frontend-react.md`     |
+   | `Language: TypeScript` + `Framework: Express`    | `backend-node.md`       |
+
+   Deduplicate `domain_skills` after this step.
+
 6. **Validate safety boundaries:**
    - Check that the implementation won't require modifying restricted paths.
    - Read `sdlc.safety_boundaries.max_files_per_pr` (default: 20) and
@@ -65,13 +94,43 @@ $ARGUMENTS — A Linear issue identifier (e.g. `YAL-123`).
    git checkout -b ai/<issue-id>-<slugified-title>
    ```
 
+7a. **Load domain engineering standards:**
+
+    For each file in `domain_skills`, read
+    `${CLAUDE_PLUGIN_ROOT}/domain-skills/<file>`.
+
+    Special case: if `web-design-audit.md` is in the list, fetch the live
+    guidelines from `https://raw.githubusercontent.com/vercel-labs/web-interface-guidelines/main/command.md`
+    via WebFetch and append the retrieved content to the file's body before
+    including it in the block below.
+
+    Concatenate all loaded content into a single `domain_context` block:
+
+    ```
+    ## Domain Engineering Standards
+
+    The following domain-specific standards apply to this implementation. They
+    supplement (not replace) the conventions in CLAUDE.md. Where they conflict
+    with CLAUDE.md, CLAUDE.md takes precedence.
+
+    ---
+    [content of each matched domain skill file, separated by ---]
+    ```
+
+    If `domain_skills` is empty, set `domain_context = ""`.
+
+    Log to the user which domain skills were loaded, e.g.:
+    `Domain context loaded: golang.md, backend-node.md`
+
 8. **Spawn the Coding Agent** as a sub-agent via Task:
 
    Pass to the Coding Agent:
    - The Linear issue details (title, description, acceptance criteria)
    - The repository path and CLAUDE.md content
    - The workspace safety boundaries
-   - Instruction: "Implement the changes and write tests. Do not submit a PR."
+   - The `domain_context` block (if non-empty) as "Domain Engineering Standards"
+   - Instruction: "Implement the changes and write tests following the domain
+     engineering standards provided (if any). Do not submit a PR."
 
    Read the Coding Agent instructions from `${CLAUDE_PLUGIN_ROOT}/agents/coding-agent.md`.
 
