@@ -28,16 +28,24 @@ $ARGUMENTS — In `remote` mode, a Linear issue identifier (e.g. `YAL-123`). In
 1. **Load `.claude/settings.local.json`** from the project root. Read the `sdlc` config key,
    including safety boundaries.
 
-2. **Read the task.** Call `read_task($ARGUMENTS)`. Read:
+2. **Read the task.** Let `ref` be $ARGUMENTS, exactly as the user passed it.
+   Call `read_task(ref)`, and let `feature` be the feature that `read_task`
+   resolved `ref` within. Both are used throughout the rest of this
+   procedure — `feature` by `list_tasks(feature)` below, `ref` by
+   `update_task_status(ref, ...)` in the abort paths and step 15. Read:
    - Title, description, acceptance criteria
    - Parent context — the parent issue in `remote` mode, `tasks/README.md` in
      `local` mode
-   - Sibling tasks and their status, via `list_tasks(feature)`
+   - Sibling tasks and their status — the issue's sub-issues in `remote` mode
+     (via the Linear MCP), or `list_tasks(feature)` in `local` mode (every
+     other task file in the feature's `tasks/` directory)
    - Dependencies (ensure they are completed — abort if not). In `local` mode
      these are the `depends_on:` ids; a dependency is complete when its
      `status:` is `done`
-   - Labels in `remote` mode, or the `labels:` field in `local` mode (to
-     identify target repository, language, and domain)
+   - Labels in `remote` mode (to identify target repository, language, and
+     domain), or the `labels:` field in `local` mode (language and domain —
+     the target repository comes from the task's `repository:` field, read
+     in step 4)
    - The `Implements:` line (requirement IDs such as `REQ-03, US-02`) and the
      expected **Files** list, both written by `/sdlc-generate-task-breakdown`.
      Older issues predate these fields — if either is absent, continue without
@@ -78,8 +86,11 @@ $ARGUMENTS — In `remote` mode, a Linear issue identifier (e.g. `YAL-123`). In
    If the user cancels, stop execution and inform them that no changes were
    made. Do NOT proceed to any subsequent steps.
 
-4. **Identify the target repository** from the task description or labels.
-   Validate it exists in `.claude/settings.local.json`. Abort if not found.
+4. **Identify the target repository.** In `local` mode, read it directly from
+   the task's `repository:` front-matter field. In `remote` mode, identify it
+   from the issue description or labels, as before. Validate it exists in
+   `.claude/settings.local.json`. Abort if not found — same check in both
+   modes.
 
 5. **Navigate to the repository** and read its `.claude/CLAUDE.md` and
    `.claude/ARCHITECTURE.md` (if they exist). If `.claude/CLAUDE.md` does
@@ -212,9 +223,11 @@ $ARGUMENTS — In `remote` mode, a Linear issue identifier (e.g. `YAL-123`). In
         exception noted in the commit message.
       - "Abort" — stop and mark the task Blocked, noting the unresolved
         findings. In `remote` mode, update the Linear issue to "Blocked" with
-        a comment. In `local` mode, call `update_task_status(ref, blocked)`
-        and include the findings in the final report — task files carry no
-        comment field.
+        a comment. In `local` mode, call `update_task_status(ref, blocked,
+        reason)` with the unresolved findings as `reason` — this writes both
+        `status: blocked` and `blocked_reason:`, so the cause survives in the
+        committed task file rather than only the chat report. Also include
+        the findings in the final report.
     - **SKIPPED**: proceed to step 12 with a warning note for the commit
       message: `Security scan was skipped — Snyk not configured.`
 
@@ -301,7 +314,9 @@ $ARGUMENTS — In `remote` mode, a Linear issue identifier (e.g. `YAL-123`). In
 - If any step fails unrecoverably, mark the task Blocked and report to the
   user. In `remote` mode, update the Linear issue with a comment explaining
   what happened and set status to "Blocked". In `local` mode, call
-  `update_task_status(ref, blocked)` and include the explanation in the
-  final report.
+  `update_task_status(ref, blocked, reason)` with a short explanation as
+  `reason` — this writes both `status: blocked` and `blocked_reason:` so the
+  cause survives in the committed task file. Also include the explanation in
+  the final report.
 - Never push to remote or create a PR automatically. The human decides when
   to push.

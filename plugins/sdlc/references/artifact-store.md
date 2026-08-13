@@ -42,7 +42,7 @@ Linear issue identifier.
 | `list_tasks(feature)` | Read every `<feature-dir>/tasks/*.md` except `README.md`; parse front-matter | Linear `list_issues` for the project |
 | `create_task(feature, task)` | Write `<feature-dir>/tasks/<NNN>-<slug>.md` using the task file format below | Linear `save_issue` |
 | `read_task(ref)` | Locate the task file by composite id or path; parse front-matter and body | Linear `get_issue` |
-| `update_task_status(ref, status)` | Rewrite the `status:` front-matter field in place, leaving everything else byte-identical | Update the Linear issue status |
+| `update_task_status(ref, status, reason?)` | Rewrite the `status:` front-matter field in place. When `status` is `blocked` and `reason` is given, also write it to `blocked_reason:`. Leave everything else byte-identical | Update the Linear issue status |
 | `create_epic(feature)` | Write `<feature-dir>/tasks/README.md` — the index holding sequencing, critical path, and the requirement coverage table | Create the Linear parent issue |
 | `select_grouping()` | Return the milestone name to stamp into each task's `milestone:` field. Take the names from the source documents. If the documents define no milestones, use a single milestone named after the feature. Ask the user nothing | Prompt for the Linear project, then map or create milestones |
 
@@ -110,6 +110,7 @@ labels: [ai-sdlc, typescript]
 | `parallelizable` | no | `true` is the `[P]` marker |
 | `estimate` | yes | PERT hours |
 | `labels` | no | |
+| `blocked_reason` | no | Short free text recording why the task was blocked; present only when `status:` is `blocked` |
 
 Status values mirror Linear's, so reporting language is identical in both modes.
 
