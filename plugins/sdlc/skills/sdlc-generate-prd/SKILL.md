@@ -17,10 +17,18 @@ Can be a few sentences or a detailed brief.
 
 ## Procedure
 
+0. **Resolve the artifact store.** Read `sdlc.mode` from
+   `.claude/settings.local.json` (absent means `remote`). Read
+   `${CLAUDE_PLUGIN_ROOT}/references/artifact-store.md` and use the
+   implementation for that mode for every artifact operation named below.
+   Never call Notion or Linear directly.
+
 1. **Load `.claude/settings.local.json`** from the project root. Read the `sdlc` config key,
    including Notion `home_directory`, `docs_database`, and `templates.prd` values.
 
-2. **Verify Notion permissions.** Before doing any work, test that the Notion
+2. **Verify Notion permissions — `remote` mode only.** Skip this step entirely
+   when `sdlc.mode` is `local`; there is nothing to authorize. In `remote`
+   mode, before doing any work, test that the Notion
    MCP can both read and write to the configured `home_directory`. Fetch the
    home directory page using `notion-fetch`. If the fetch fails or returns an
    access error:
@@ -30,9 +38,13 @@ Can be a few sentences or a detailed brief.
      access to the target page."
    - **STOP.** Do not proceed until permissions are confirmed.
 
-3. **If a PRD template is configured**, fetch it from Notion using the MCP and
+3. **If a PRD template is configured and `sdlc.mode` is `remote`**, fetch it
+   from Notion using the MCP and
    use its structure as the authoritative layout. Otherwise, use the default
    structure defined in step 5 below.
+
+   In `local` mode there is no configured template — use the structure defined
+   in step 5 of this procedure. Do not create a template file.
 
 4. **Ask clarifying questions** before generating. Gather enough information to
    fill every mandatory section. At minimum, ask about:
@@ -256,7 +268,15 @@ Can be a few sentences or a detailed brief.
    Bulleted list: external dependencies, internal blockers, required decisions
    (reference OQ IDs where applicable).
 
-6. **Create the Notion page.** Title format: `PRD: <Feature Name>`.
+6. **Write the PRD.** Call `new_feature(<feature name>)` to allocate the
+   feature, then `write_doc(feature, prd, <content>)`.
+
+   In `remote` mode this creates the Notion page titled `PRD: <Feature Name>`
+   with the properties described below. In `local` mode it writes
+   `.sdlc/features/NNN-slug/prd.md` and no properties are needed — the
+   directory name carries the feature identity.
+
+   **Remote mode — page properties:**
 
    **If `docs_database` is configured** (non-empty in `.claude/settings.local.json`):
    Create the page as an entry in the SDLC Documents database with these
@@ -280,7 +300,8 @@ Can be a few sentences or a detailed brief.
    - Checkbox lists for acceptance criteria in the Requirements section
    - Bold formatting for requirement IDs and user story IDs
 
-7. **Return the Notion page URL** to the user.
+7. **Return the artifact reference** to the user — the Notion page URL in
+   `remote` mode, or the path returned by `write_doc` in `local` mode.
 
 ## ID Numbering Reference
 
