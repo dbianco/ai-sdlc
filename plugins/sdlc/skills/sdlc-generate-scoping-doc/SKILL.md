@@ -11,14 +11,24 @@ team's response to "how will we build this?"
 
 ## Input
 
-$ARGUMENTS — A Notion URL or page ID pointing to an existing PRD.
+$ARGUMENTS — In `remote` mode, a Notion URL or page ID pointing to an existing
+PRD. In `local` mode, a feature reference — `001`, `order-export`, or
+`001-order-export`.
 
 ## Procedure
+
+0. **Resolve the artifact store.** Read `sdlc.mode` from
+   `.claude/settings.local.json` (absent means `remote`). Read
+   `${CLAUDE_PLUGIN_ROOT}/references/artifact-store.md` and use the
+   implementation for that mode for every artifact operation named below.
+   Never call Notion or Linear directly.
 
 1. **Load `.claude/settings.local.json`** from the project root. Read the `sdlc` config key,
    including Notion config (`docs_database`) and the list of allowed repositories.
 
-2. **Verify Notion permissions.** Before doing any work, test that the Notion
+2. **Verify Notion permissions — `remote` mode only.** Skip this step entirely
+   when `sdlc.mode` is `local`. In `remote` mode, before doing any work, test
+   that the Notion
    MCP can both read and write to the configured `home_directory`. Fetch the
    home directory page using `notion-fetch`. If the fetch fails or returns an
    access error:
@@ -28,7 +38,11 @@ $ARGUMENTS — A Notion URL or page ID pointing to an existing PRD.
      access to the target page."
    - **STOP.** Do not proceed until permissions are confirmed.
 
-3. **Fetch the PRD** from Notion using the MCP. Read it completely.
+3. **Read the PRD.** Call `resolve_feature($ARGUMENTS)`, then
+   `read_doc(feature, prd)`. Read it completely.
+
+   If the PRD is absent, say so and stop — a Scoping Doc cannot be written
+   without it. Do not offer to invent one.
 
 4. **Validate the PRD is complete.** Scan the entire document for any sections
    that require human intervention. Check for ALL of the following markers:
@@ -150,7 +164,8 @@ $ARGUMENTS — A Notion URL or page ID pointing to an existing PRD.
 
    If the user replies "none", omit Section 8 from the output.
 
-10. **If a scoping doc template is configured** in `.claude/settings.local.json`, fetch and
+10. **If a scoping doc template is configured and `sdlc.mode` is `remote`**,
+    fetch and
    follow its structure. Otherwise, use the default structure below.
 
 11. **Generate the Scoping Document:**
@@ -217,7 +232,16 @@ $ARGUMENTS — A Notion URL or page ID pointing to an existing PRD.
    reference this split by name. The coding agent will assume the split
    already exists in Split.io and will use the Split SDK to evaluate it.
 
-12. **Create the Notion page.** Title format: `Scoping: <Feature Name>`.
+12. **Write the Scoping Doc.** Call `write_doc(feature, scoping-doc, <content>)`.
+
+    In `remote` mode this creates the Notion page titled
+    `Scoping: <Feature Name>` with the properties described below. In `local`
+    mode it writes `.sdlc/features/NNN-slug/scoping-doc.md`.
+
+    Reference the PRD using `doc_link(feature, prd)` so the link resolves in
+    both modes.
+
+    **Remote mode — page properties:**
 
     **If `docs_database` is configured** (non-empty in `.claude/settings.local.json`):
     Create the page as an entry in the SDLC Documents database with these
@@ -231,7 +255,8 @@ $ARGUMENTS — A Notion URL or page ID pointing to an existing PRD.
     **If `docs_database` is empty:** Fall back to creating a flat page under
     the configured `home_directory`.
 
-13. **Return the Notion page URL** to the user.
+13. **Return the artifact reference** to the user — the Notion page URL in
+    `remote` mode, or the path returned by `write_doc` in `local` mode.
 
 ---
 
