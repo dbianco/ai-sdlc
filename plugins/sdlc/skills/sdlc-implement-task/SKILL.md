@@ -1,30 +1,43 @@
 ---
 name: sdlc-implement-task
-description: Implement a Linear issue by orchestrating the Coding, Test, optional Security, and Documentator agents
+description: Implement a task by orchestrating the Coding, Test, optional Security, and Documentator agents
 disable-model-invocation: true
 ---
 
 # /sdlc-implement-task
 
-Implement a Linear issue by orchestrating the Coding Agent, Test Agent,
-Security Agent (optional — the user is asked each run), and Documentator
-Agent. This is the entry point for the autonomous coding loop.
+Implement a task by orchestrating the Coding Agent, Test Agent, Security
+Agent (optional — the user is asked each run), and Documentator Agent. This
+is the entry point for the autonomous coding loop. In `remote` mode the task
+is a Linear issue; in `local` mode it is a task file under a feature's
+`tasks/` directory.
 
 ## Input
 
-$ARGUMENTS — A Linear issue identifier (e.g. `YAL-123`).
+$ARGUMENTS — In `remote` mode, a Linear issue identifier (e.g. `YAL-123`). In
+`local` mode, a task id (e.g. `001-002`) or a path to a task file.
 
 ## Procedure
+
+0. **Resolve the artifact store.** Read `sdlc.mode` from
+   `.claude/settings.local.json` (absent means `remote`). Read
+   `${CLAUDE_PLUGIN_ROOT}/references/artifact-store.md` and use the
+   implementation for that mode for every artifact operation named below.
+   Never call Notion or Linear directly.
 
 1. **Load `.claude/settings.local.json`** from the project root. Read the `sdlc` config key,
    including safety boundaries.
 
-2. **Fetch the Linear issue** via the Linear MCP. Read:
+2. **Read the task.** Call `read_task($ARGUMENTS)`. Read:
    - Title, description, acceptance criteria
-   - Parent issue (for broader context)
-   - Sub-issues (list them with their status)
-   - Dependencies (ensure they are completed — abort if not)
-   - Labels (to identify target repository, language, and domain)
+   - Parent context — the parent issue in `remote` mode, `tasks/README.md` in
+     `local` mode
+   - Sibling tasks and their status, via `list_tasks(feature)`
+   - Dependencies (ensure they are completed — abort if not). In `local` mode
+     these are the `depends_on:` ids; a dependency is complete when its
+     `status:` is `done`
+   - Labels in `remote` mode, or the `labels:` field in `local` mode (to
+     identify target repository, language, and domain)
    - The `Implements:` line (requirement IDs such as `REQ-03, US-02`) and the
      expected **Files** list, both written by `/sdlc-generate-task-breakdown`.
      Older issues predate these fields — if either is absent, continue without
@@ -50,14 +63,14 @@ $ARGUMENTS — A Linear issue identifier (e.g. `YAL-123`).
 
 3. **Confirm with the user** before proceeding. Present a summary using
    `AskUserQuestion`:
-   - **Issue ID and title**
+   - **Task ID and title**
    - **Description** (first ~3 sentences or acceptance criteria)
-   - **Status and priority**
-   - **Sub-issues** (list each with ID, title, and status)
+   - **Status** (and priority, in `remote` mode)
+   - **Sibling tasks** (list each with ID, title, and status)
    - **Dependencies** (list any, noting if they are completed or not)
    - **Labels**
 
-   Ask: "Do you want to proceed with implementing this issue?"
+   Ask: "Do you want to proceed with implementing this task?"
    Options:
    - "Yes, implement it" — continue to step 4.
    - "No, cancel" — abort gracefully with no changes.
@@ -65,7 +78,7 @@ $ARGUMENTS — A Linear issue identifier (e.g. `YAL-123`).
    If the user cancels, stop execution and inform them that no changes were
    made. Do NOT proceed to any subsequent steps.
 
-4. **Identify the target repository** from the issue description or labels.
+4. **Identify the target repository** from the task description or labels.
    Validate it exists in `.claude/settings.local.json`. Abort if not found.
 
 5. **Navigate to the repository** and read its `.claude/CLAUDE.md` and
@@ -95,8 +108,12 @@ $ARGUMENTS — A Linear issue identifier (e.g. `YAL-123`).
    git fetch origin
    git checkout main
    git pull origin main
-   git checkout -b ai/<issue-id>-<slugified-title>
+   git checkout -b ai/<task-id>-<slugified-title>
    ```
+
+   `<task-id>` is the Linear issue id (`yal-123`) in `remote` mode, or the
+   composite task id (`001-002`) in `local` mode — producing branches like
+   `ai/001-002-add-csv-export-endpoint`.
 
 7a. **Load domain engineering standards:**
 
@@ -129,9 +146,9 @@ $ARGUMENTS — A Linear issue identifier (e.g. `YAL-123`).
 8. **Spawn the Coding Agent** as a sub-agent via Task:
 
    Pass to the Coding Agent:
-   - The Linear issue details (title, description, acceptance criteria)
-   - The requirement IDs from the issue's `Implements:` line, and the
-     expected **Files** list, when the issue carries them
+   - The task details (title, description, acceptance criteria)
+   - The requirement IDs from the task's `Implements:` line, and the
+     expected **Files** list, when the task carries them
    - The repository path and CLAUDE.md content
    - The workspace safety boundaries
    - The `domain_context` block (if non-empty) as "Domain Engineering Standards"
@@ -145,7 +162,7 @@ $ARGUMENTS — A Linear issue identifier (e.g. `YAL-123`).
    Pass to the Test Agent:
    - The changes made by the Coding Agent (files modified)
    - The repository path and CLAUDE.md content
-   - The acceptance criteria from the Linear issue
+   - The acceptance criteria from the task
 
    Read the Test Agent instructions from `${CLAUDE_PLUGIN_ROOT}/agents/test-agent.md`.
 
@@ -178,7 +195,7 @@ $ARGUMENTS — A Linear issue identifier (e.g. `YAL-123`).
     - The exact list of files modified by the Coding Agent
     - The repository path, CLAUDE.md content, and ARCHITECTURE.md content
       (if it exists)
-    - The Linear issue details (title, description, acceptance criteria) —
+    - The task details (title, description, acceptance criteria) —
       used for false positive evaluation context
     - The workspace safety boundaries from `.claude/settings.local.json`
 
@@ -193,8 +210,11 @@ $ARGUMENTS — A Linear issue identifier (e.g. `YAL-123`).
         the Security Agent once more before proceeding.
       - "Accept risk and continue" — proceed with a documented security
         exception noted in the commit message.
-      - "Abort" — stop, update the Linear issue to "Blocked" with a comment
-        listing the unresolved findings.
+      - "Abort" — stop and mark the task Blocked, noting the unresolved
+        findings. In `remote` mode, update the Linear issue to "Blocked" with
+        a comment. In `local` mode, call `update_task_status(ref, blocked)`
+        and include the findings in the final report — task files carry no
+        comment field.
     - **SKIPPED**: proceed to step 12 with a warning note for the commit
       message: `Security scan was skipped — Snyk not configured.`
 
@@ -217,12 +237,15 @@ $ARGUMENTS — A Linear issue identifier (e.g. `YAL-123`).
     git add -A
     git commit -m "<type>(<scope>): <description>
 
-    Implements <LINEAR-ISSUE-ID>
+    Implements <task-id>
 
     <bullet summary of changes>
 
     Security: <PASS|PASS-WITH-FP|FAIL|SKIPPED> — <N findings remediated, M FPs documented, 'unresolved findings — see report', 'scan declined by user', or 'Snyk not configured'>"
     ```
+    `<task-id>` is the Linear issue id in `remote` mode, or the composite task
+    id in `local` mode.
+
     Follow the repo's commit convention from CLAUDE.md if one exists.
     Always include the `Security:` trailer line — from the Security Agent
     report when it ran, or `Security: SKIPPED — scan declined by user` when
@@ -235,29 +258,35 @@ $ARGUMENTS — A Linear issue identifier (e.g. `YAL-123`).
     - Security scan results (status, findings remediated, FPs documented) —
       or a note that the scan was skipped at the user's request
     - Files modified (list)
-    - **Requirement trace** (when the issue carried an `Implements:` line):
+    - **Requirement trace** (when the task carried an `Implements:` line):
       each requirement ID and the change that satisfies it, as reported by the
       Coding Agent. Call out any ID with no corresponding change, and any file
-      modified that was not in the issue's expected **Files** list. Neither is
+      modified that was not in the task's expected **Files** list. Neither is
       automatically wrong — the breakdown's file list is best-effort — but an
       unexplained drift between planned and actual scope is the thing a
       reviewer most needs pointed at.
     - Number of iteration cycles needed
     - Ready for human review: `git diff main..HEAD`
 
-15. **Update the Linear issue** status to "In Review" via the Linear MCP.
+15. **Update the task status** to in-review. Call
+    `update_task_status(ref, in_review)`.
+
+    In `remote` mode this sets the Linear issue to "In Review". In `local` mode
+    it rewrites the `status:` front-matter field to `in_review`, leaving the
+    rest of the file byte-identical.
 
 ---
 
 ### Retrospective
 
 16. **Spawn the Skill Retrospective Agent.** After all changes are committed
-    and the Linear issue is updated, spawn a sub-agent using the instructions
+    and the task status is updated, spawn a sub-agent using the instructions
     in `${CLAUDE_PLUGIN_ROOT}/agents/skill-retrospective.md`.
 
     Pass to the agent:
     - **Skill name**: `sdlc-implement-task`
-    - **What was built**: the Linear issue ID, title, and branch name
+    - **What was built**: the task id (Linear issue id in `remote` mode,
+      composite task id in `local` mode), title, and branch name
     - **Run summary**: number of Coding/Test Agent iteration cycles needed,
       test results (pass/fail/coverage), whether the user opted into the
       security scan and its status and finding counts, files modified count, any safety boundary concerns, any user
@@ -269,7 +298,10 @@ $ARGUMENTS — A Linear issue identifier (e.g. `YAL-123`).
 - This skill orchestrates. It does NOT write code itself.
 - Each sub-agent runs in a sandboxed Task. The orchestrator passes context
   in and reads results out.
-- If any step fails unrecoverably, update the Linear issue with a comment
-  explaining what happened, set status to "Blocked", and report to the user.
+- If any step fails unrecoverably, mark the task Blocked and report to the
+  user. In `remote` mode, update the Linear issue with a comment explaining
+  what happened and set status to "Blocked". In `local` mode, call
+  `update_task_status(ref, blocked)` and include the explanation in the
+  final report.
 - Never push to remote or create a PR automatically. The human decides when
   to push.
