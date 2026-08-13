@@ -11,18 +11,27 @@ detailed technical blueprint that coding agents will use.
 
 ## Input
 
-$ARGUMENTS — (optional) A URL or ID pointing to the primary source: Scoping Doc
-(Notion URL), Linear issue (URL or `XXX-NNN`), Slack thread URL, Notion page URL,
-or free text description. If omitted, the skill will ask.
+$ARGUMENTS — (optional) The primary source. In `remote` mode: a Scoping Doc
+Notion URL, a Linear issue (URL or `XXX-NNN`), a Slack thread URL, a Notion page
+URL, or free text. In `local` mode: a feature reference (`001`, `order-export`,
+`001-order-export`) or free text. If omitted, the skill will ask.
 
 ## Procedure
 
 ### Setup
 
+0. **Resolve the artifact store.** Read `sdlc.mode` from
+   `.claude/settings.local.json` (absent means `remote`). Read
+   `${CLAUDE_PLUGIN_ROOT}/references/artifact-store.md` and use the
+   implementation for that mode for every artifact operation named below.
+   Never call Notion or Linear directly.
+
 1. **Load `.claude/settings.local.json`** from the project root. Read the `sdlc`
    config key, including Notion config, `docs_database`, and `templates.jotdown`.
 
-2. **Verify Notion permissions.** Test that the Notion MCP can both read and
+2. **Verify Notion permissions — `remote` mode only.** Skip this step entirely
+   when `sdlc.mode` is `local`. In `remote` mode, test that the Notion MCP can
+   both read and
    write to the configured `home_directory`. Fetch the home directory page
    using `notion-fetch`. If the fetch fails or returns an access error:
    - Tell the user: "The Notion integration does not have access to your
@@ -35,8 +44,8 @@ or free text description. If omitted, the skill will ask.
 
 ### Phase 1: Understand What Data Is Needed
 
-3. **Fetch the Jot Down template.** If `templates.jotdown` is configured in
-   `.claude/settings.local.json`, fetch it from Notion via `notion-fetch`.
+3. **Fetch the Jot Down template.** If `templates.jotdown` is configured and
+   `sdlc.mode` is `remote`, fetch it from Notion via `notion-fetch`.
    Read the template to understand what sections and data fields are required
    for the Jot Down output. The template defines the structure the generated
    document must follow.
@@ -59,16 +68,23 @@ or free text description. If omitted, the skill will ask.
    | URL containing `notion.so` or `notion.site` | Notion page | `notion-fetch` |
    | URL containing `linear.app` or pattern `XXX-NNN` | Linear issue | `get_issue` |
    | URL containing `slack.com` | Slack thread | `slack_read_thread` |
+   | A feature ref in `local` mode (`001`, `order-export`, `001-order-export`) | Local feature | `resolve_feature`, then `read_doc` for each kind present |
    | Other non-empty text | Free text | Use directly |
    | Empty / not provided | No source | Ask the user for a description of what needs to be built or fixed |
 
    Extract whatever context is available from the source material.
 
-5. **If source is a Notion page, check if it's a Scoping Doc with a linked
-   PRD.** Look for Scoping Doc structural markers (milestones section,
-   architectural decisions, affected services, linked PRD reference). If found:
+5. **Check whether the source carries a Scoping Doc and a PRD.**
 
-   - Fetch the linked PRD as well.
+   In `remote` mode: if the source is a Notion page, look for Scoping Doc
+   structural markers (milestones section, architectural decisions, affected
+   services, linked PRD reference); if found, fetch the linked PRD as well.
+
+   In `local` mode: call `read_doc(feature, scoping-doc)` and
+   `read_doc(feature, prd)`. Treat whichever exist as the source documents.
+
+   If both documents are present in either mode:
+
    - **Validate both documents for blocking markers.** Scan both documents for:
      - `⚠️ NEEDS HUMAN INPUT` or `NEEDS HUMAN INPUT`
      - Open Questions marked as unresolved (`OQ-x` items without an answer)
@@ -94,8 +110,9 @@ or free text description. If omitted, the skill will ask.
      **If blocking items exist:**
      - List every one to the user, grouped by document and section.
      - Tell the user: "The source documents have unresolved items that must be
-       completed before a Jot Down can be generated. Please resolve them in
-       Notion and re-run this skill."
+       completed before a Jot Down can be generated. Please resolve them and
+       re-run this skill." Name the file path in `local` mode, or the Notion
+       page in `remote` mode.
      - **STOP. Do NOT proceed.**
 
      **If only non-blocking items exist:**
@@ -116,9 +133,11 @@ or free text description. If omitted, the skill will ask.
 
    c. **Data UI Inventory** — if the source context suggests frontend work
       (mentions UI, components, screens, pages, frontend, React, etc.), ask:
-      "Is there a Data UI Inventory for this work?" If yes, collect the Notion
-      URL and fetch it via `notion-fetch`. If the context does not suggest
-      frontend work, skip silently.
+      "Is there a Data UI Inventory for this work?" If yes: in `remote` mode,
+      collect the Notion URL and fetch it via `notion-fetch`; in `local` mode,
+      call `read_doc(feature, data-ui-inventory)` if a feature was resolved in
+      step 4, otherwise ask for the file path and read it directly. If the
+      context does not suggest frontend work, skip silently.
 
    d. **Google Tag Manager (GTM) Events** — if the source context suggests
       frontend work (same detection as 6c), ask: "Do you want to include
@@ -155,8 +174,14 @@ or free text description. If omitted, the skill will ask.
    - Present them via `AskUserQuestion` (`multiSelect: true`), listing each
      milestone by name with a brief scope summary.
    - Let the user pick one or more. At least one must be selected.
-   - Each selected milestone produces a separate Jot Down document. Steps in
-     Phase 3 execute once per milestone, scoped to that milestone only.
+   - In `remote` mode: each selected milestone produces a separate Jot Down
+     document (a separate Notion page). Steps in Phase 3 execute once per
+     milestone, scoped to that milestone only. Cross-milestone dependencies
+     should be noted but not detailed.
+   - In `local` mode: one feature directory holds one Jot Down. Steps 9–12a
+     execute once per milestone to draft that milestone's section, and all
+     selected milestones are assembled into the single document written in
+     step 13, each under its own `### Milestone N of M` heading.
      Cross-milestone dependencies should be noted but not detailed.
 
    If no milestones: generate a single Jot Down covering entire scope.
@@ -321,8 +346,8 @@ or free text description. If omitted, the skill will ask.
     appear in the dataLayer push. The trigger is the user action that
     fires the event.
 
-12a. **Gate the draft on measurable acceptance criteria.** Before creating the
-    Notion page, re-read every acceptance criterion drafted in Section 10 (and
+12a. **Gate the draft on measurable acceptance criteria.** Before writing the
+    Jot Down, re-read every acceptance criterion drafted in Section 10 (and
     any embedded per-endpoint criteria in Section 4).
 
     For each criterion, check whether it can be turned into a passing or
@@ -346,9 +371,19 @@ or free text description. If omitted, the skill will ask.
     Do NOT invent a threshold silently. An invented number is worse than a
     flagged gap, because it looks agreed.
 
-13. **Create the Notion page.**
-    Title format: `Jot Down: <Feature Name> (Milestone N: <Name>)`.
-    If covering the full scope (no milestones): `Jot Down: <Feature Name>`.
+13. **Write the Jot Down.** Call `write_doc(feature, jotdown, <content>)`.
+
+    In `remote` mode this creates the Notion page titled
+    `Jot Down: <Feature Name> (Milestone N: <Name>)`, or
+    `Jot Down: <Feature Name>` when covering the full scope, with the
+    properties described below. In `local` mode it writes
+    `.sdlc/features/NNN-slug/jotdown.md`; the milestone belongs in the document
+    body, since one feature directory holds one Jot Down.
+
+    Reference the PRD and Scoping Doc using `doc_link` so links resolve in both
+    modes.
+
+    **Remote mode — page properties:**
 
     **If `docs_database` is configured** (non-empty in `.claude/settings.local.json`):
     Create the page as an entry in the SDLC Documents database with these
@@ -364,21 +399,28 @@ or free text description. If omitted, the skill will ask.
     **If `docs_database` is empty:** Fall back to creating a flat page under
     the configured `home_directory`.
 
-14. **Repeat steps 9–13** for each remaining selected milestone.
+14. **Repeat steps 9–12a** for each remaining selected milestone. In `remote`
+    mode, step 13 also repeats, producing one Notion page per milestone. In
+    `local` mode, step 13 runs once, after every milestone's section has been
+    drafted, writing all of them into the single `jotdown.md`.
 
-15. **Return all Notion page URLs** to the user, listed by milestone.
+15. **Return the artifact reference(s).** In `remote` mode, return all Notion
+    page URLs, listed by milestone. In `local` mode, return the single file
+    path returned by `write_doc`.
 
 ---
 
 ### Retrospective
 
-16. **Spawn the Skill Retrospective Agent.** After all Notion pages are created
-    and URLs returned, spawn a sub-agent using the instructions in
+16. **Spawn the Skill Retrospective Agent.** After the Jot Down is written and
+    its artifact reference(s) returned — the Notion page(s) in `remote` mode,
+    or the file in `local` mode — spawn a sub-agent using the instructions in
     `${CLAUDE_PLUGIN_ROOT}/agents/skill-retrospective.md`.
 
     Pass to the agent:
     - **Skill name**: `sdlc-generate-jotdown`
-    - **What was built**: the Jot Down title(s) and Notion URL(s)
+    - **What was built**: the Jot Down title(s) and artifact reference(s) —
+      Notion URL(s) in `remote` mode, file path in `local` mode
     - **Run summary**: source type used (Scoping Doc, Linear, Slack, free text),
       key architectural decisions made, gaps that required user input, sections
       that needed iteration, any user corrections or pushback during the run
@@ -395,6 +437,7 @@ or free text description. If omitted, the skill will ask.
 - If you cannot determine something from the codebase, mark it as
   `⚠️ NEEDS HUMAN INPUT: <what's needed>` — do not guess.
 - The Jot Down must be self-sufficient: `generate-task-breakdown` must be able
-  to create Linear issues from it alone, without fetching a PRD or Scoping Doc.
-  All milestones, acceptance criteria, affected services, architectural
-  decisions, and risks must be embedded directly in the document.
+  to create tasks from it alone — Linear issues in `remote` mode, task files in
+  `local` mode — without fetching a PRD or Scoping Doc. All milestones,
+  acceptance criteria, affected services, architectural decisions, and risks
+  must be embedded directly in the document.
