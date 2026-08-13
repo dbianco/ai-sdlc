@@ -31,28 +31,7 @@ Jot Down. In `local` mode, a feature reference — `001`, `order-export`, or
    `max_lines_per_pr`). These limits constrain the maximum size of any single
    task — defaults are 20 files and 500 lines if not configured.
 
-2. **Establish task grouping.** Call `select_grouping()`.
-
-   In `remote` mode this lists Linear projects via
-   `mcp__claude_ai_Linear__list_projects` and requires the user to pick one via
-   `AskUserQuestion`, then lists milestones for that project via
-   `mcp__claude_ai_Linear__list_milestones` and maps or creates them:
-
-   - If the Jot Down covers a specific milestone from the Scoping Doc, ask the
-     user which Linear milestone to assign issues to.
-   - If the Linear project has no milestones yet, create them from the Scoping
-     Doc milestones using `mcp__claude_ai_Linear__save_milestone`. Ask the user
-     to confirm before creating.
-
-   Every issue must belong to a project and a milestone. Do not proceed until
-   both are chosen.
-
-   In `local` mode there is no project and no picker. Take the milestone names
-   from the source documents and stamp each task's `milestone:` field. If the
-   documents define no milestones, use a single milestone named after the
-   feature. Ask the user nothing.
-
-3. **Read the source documents.** Call `resolve_feature($ARGUMENTS)`, then
+2. **Read the source documents.** Call `resolve_feature($ARGUMENTS)`, then
    `read_doc` for each kind: `jotdown` (required — stop if absent),
    `scoping-doc`, `prd`, and `data-ui-inventory` (each optional; continue
    without any that are missing, noting the omission).
@@ -76,6 +55,28 @@ Jot Down. In `local` mode, a feature reference — `001`, `order-export`, or
    under its own `### Milestone N of M` heading. Read the whole file and treat
    each such section as a milestone's scope — do not assume one file per
    milestone.
+
+3. **Establish task grouping.** Call `select_grouping()`. This runs after the
+   documents are read because that is where the milestone names come from.
+
+   In `remote` mode this lists Linear projects via
+   `mcp__claude_ai_Linear__list_projects` and requires the user to pick one via
+   `AskUserQuestion`, then lists milestones for that project via
+   `mcp__claude_ai_Linear__list_milestones` and maps or creates them:
+
+   - If the Jot Down covers a specific milestone from the Scoping Doc, ask the
+     user which Linear milestone to assign issues to.
+   - If the Linear project has no milestones yet, create them from the Scoping
+     Doc milestones using `mcp__claude_ai_Linear__save_milestone`. Ask the user
+     to confirm before creating.
+
+   Every issue must belong to a project and a milestone. Do not proceed until
+   both are chosen.
+
+   In `local` mode there is no project and no picker. Take the milestone names
+   from the source documents and stamp each task's `milestone:` field. If the
+   documents define no milestones, use a single milestone named after the
+   feature. Ask the user nothing.
 
 4. **Validate that all source documents are complete.** Scan all documents
    for any sections that require human intervention. Check for ALL of the
@@ -165,7 +166,8 @@ Jot Down. In `local` mode, a feature reference — `001`, `order-export`, or
    - **Files**: The exact paths the task is expected to create or modify,
      relative to the repository root (e.g. `internal/orders/model.go`,
      `apps/menu/src/components/OrderStatus.tsx`). Best-effort is fine — this
-     is what makes the task reviewable and lets step 7 detect file collisions.
+     is what makes the task reviewable and lets the sequencing step detect
+     file collisions.
      Use a directory path only when the exact filename genuinely cannot be
      known yet, and say why.
    - **Acceptance criteria**: Testable conditions for "done". Pull from
@@ -180,14 +182,16 @@ Jot Down. In `local` mode, a feature reference — `001`, `order-export`, or
    - **Dependencies**: Which other tasks must be completed first.
    - **Repository**: Which repo from `.claude/settings.local.json` this task belongs to.
    - **Labels**: `ai-sdlc`, plus language label (e.g. `golang`, `typescript`).
-   - **Milestone**: Which milestone this task belongs to (from step 2) — a
+   - **Milestone**: Which milestone this task belongs to (from the task
+     grouping step) — a
      Linear milestone in `remote` mode, the `milestone:` front-matter value in
      `local` mode.
 
 7. **Sequence the tasks** using dependency order. Identify the critical path.
    Group tasks by their milestone.
 
-   Then resolve file collisions using the **Files** list from step 6. Any two
+   Then resolve file collisions using the **Files** list from the task
+   definition step. Any two
    tasks that touch the same file MUST be sequenced, never marked `[P]` —
    either give one a dependency on the other, or merge them if the split was
    artificial. Two agents editing one file in parallel produce conflicting
@@ -195,61 +199,81 @@ Jot Down. In `local` mode, a feature reference — `001`, `order-export`, or
    inconsistency this breakdown exists to prevent.
 
    Strip `[P]` from any task that fails this check, and report the collisions
-   you resolved in step 10.
+   you resolved in the report step.
 
-8. **Create the epic.** Call `create_epic(feature)`.
+8. **Map requirement coverage.** Before creating anything, map every
+   requirement stated in the PRD — each `REQ-xx`, `US-xx`, and `V-xx` — to the
+   tasks that implement it, reading each task's `Implements:` line. This
+   produces one table, built once here and used twice: written into the epic
+   in `local` mode, and presented to the user in the report step.
+
+   | Requirement | Covered by | Notes |
+   | ----------- | ---------- | ----- |
+   | REQ-03      | YAL-124, YAL-127 | |
+   | US-05       | — | no task created |
+
+   Identify tasks in the **Covered by** column the way the current mode names
+   them:
+
+   - In `local` mode the composite task id (e.g. `001-002`) is assigned here,
+     following the order fixed by the sequencing step. The whole table is
+     therefore known before a single file is written, which is what lets the
+     epic carry it.
+   - In `remote` mode Linear assigns the identifier (e.g. `YAL-124`) only when
+     the issue is created, so **Covered by** is completed in the task-creation
+     step below. The Linear epic carries links to the source documents, not
+     this table — unchanged from before.
+
+   Follow the table with two explicit counts: **requirements with no task**
+   and **tasks with no requirement** (`Implements: INFRA` does not count as
+   unmapped). Both should be zero. If either is non-zero, list the offenders
+   by ID and tell the user which side needs fixing — a missing task means the
+   breakdown is incomplete, a missing requirement means the PRD is.
+
+9. **Create the epic.** Call `create_epic(feature)`.
 
    In `remote` mode this creates the parent Linear issue titled
    `[Feature Name] — Implementation`, labelled `ai-sdlc` and `epic`, in the
-   selected project and milestone, with links to all source documents.
+   configured team and in the selected project and milestone, with links to
+   all source documents.
 
    In `local` mode it writes `tasks/README.md` containing: the feature name, a
    link to each source document via `doc_link`, the ordered task list with
-   dependencies, the critical path, and the requirement coverage table produced
-   by the report step.
+   dependencies, the critical path, and the requirement coverage table from
+   the coverage step.
 
-9. **Create each task.** Call `create_task(feature, task)` per task.
+10. **Create each task.** Call `create_task(feature, task)` per task.
 
-   In `remote` mode this creates a Linear sub-issue under the parent, carrying
-   `project` and `milestone`, with dependencies set from the sequencing.
+    In `remote` mode this creates a Linear sub-issue under the parent created
+    in the epic step, carrying `project` and `milestone`, with dependencies set
+    from the sequencing. Once Linear has assigned the issue identifiers, use
+    them to complete the **Covered by** column of the coverage table.
 
-   In `local` mode it writes `tasks/<NNN>-<slug>.md` using the task file format
-   in the artifact store contract — front matter carrying `id`, `title`,
-   `status`, `milestone`, `repository`, `depends_on`, `implements`, `files`,
-   `parallelizable`, `estimate`, and `labels`. Every field defined there is
-   required except `depends_on`, `parallelizable`, and `labels`. The
-   `Implements:` line becomes the `implements:` front-matter list, and the
-   expected file list becomes `files:`; `[P]` becomes `parallelizable: true`.
-   Every newly created task file starts at `status: todo` — `/sdlc-implement-task`
-   reads that field to resolve dependencies, so it must be present and correct
-   from the moment the file is written.
+    In `local` mode it writes `tasks/<NNN>-<slug>.md` using the task file format
+    in the artifact store contract — front matter carrying `id`, `title`,
+    `status`, `milestone`, `repository`, `depends_on`, `implements`, `files`,
+    `parallelizable`, `estimate`, and `labels`. Every field defined there is
+    required except `depends_on`, `parallelizable`, and `labels`. The
+    `Implements:` line becomes the `implements:` front-matter list, and the
+    expected file list becomes `files:`; `[P]` becomes `parallelizable: true`.
+    Every newly created task file starts at `status: todo` — `/sdlc-implement-task`
+    reads that field to resolve dependencies, so it must be present and correct
+    from the moment the file is written.
 
-10. **Report to the user:**
+11. **Report to the user:**
     - Total number of tasks created, grouped by milestone
     - Critical path and estimated timeline (using PERT expected values)
     - The artifact reference for the epic — the parent Linear issue URL in
       `remote` mode, the path to `tasks/README.md` in `local` mode
     - Any tasks where you were uncertain about scope or estimates
-    - **Requirement coverage table** — one row per `REQ-xx`, `US-xx`, and
-      `V-xx` found in the PRD:
-
-      | Requirement | Covered by | Notes |
-      | ----------- | ---------- | ----- |
-      | REQ-03      | YAL-124, YAL-127 | |
-      | US-05       | — | no task created |
-
-      Identify tasks in the **Covered by** column the way the current mode
-      names them: Linear issue identifiers (e.g. `YAL-124`) in `remote` mode,
-      composite task ids (e.g. `001-002`) in `local` mode.
-
-      Follow the table with two explicit counts: **requirements with no
-      task** and **tasks with no requirement** (`Implements: INFRA` does not
-      count as unmapped). Both should be zero. If either is non-zero, list
-      the offenders by ID and tell the user which side needs fixing — a
-      missing task means the breakdown is incomplete, a missing requirement
-      means the PRD is.
-    - **File collisions resolved** in step 7, if any: which tasks shared a
-      file and how you sequenced them.
+    - **Requirement coverage table** — the table built in the coverage step,
+      now complete in both modes, together with its two counts:
+      **requirements with no task** and **tasks with no requirement**. Present
+      it here in full even in `local` mode, where the epic also carries it —
+      the user should not have to open a file to see whether anything went
+      unmapped.
+    - **File collisions resolved** in the sequencing step, if any: which tasks
+      shared a file and how you sequenced them.
 
 ## Task Decomposition Rules
 
@@ -269,7 +293,7 @@ Jot Down. In `local` mode, a feature reference — `001`, `order-export`, or
 - The `Implements:` line is read downstream: `/sdlc-implement-task` passes it to
   the Coding Agent, which reports back which requirement each change satisfies.
   Keep the IDs exact — a typo breaks the trace silently.
-- The validation in step 4 ensures no "NEEDS HUMAN INPUT" sections reach task
+- The validation step ensures no "NEEDS HUMAN INPUT" sections reach task
   creation. If validation was somehow bypassed, STOP and re-run validation.
 - Estimate honestly. A 2-hour optimistic / 40-hour pessimistic task is a sign
   the task needs to be broken down further.

@@ -28,16 +28,41 @@ $ARGUMENTS — Optional mode flag:
 
 ### Phase 0 — Choose the Artifact Store
 
-0.1. **If `sdlc.mode` is already set in `.claude/settings.local.json` and the
-     skill was invoked without `--switch-mode`, skip this phase.** Do not
-     re-ask on every ordinary run.
+0.1. **Decide whether this phase runs at all.** Read
+     `.claude/settings.local.json` first and classify the workspace into
+     exactly one of these four cases:
 
-     **If `sdlc.mode` is already set and the skill was invoked with
-     `--switch-mode`, proceed with this phase** to let the user pick a new
-     mode. Phase 0.4 covers what to tell them once they do.
+     a. **`sdlc.mode` is already set and the skill was invoked without
+        `--switch-mode`** — skip this phase. Do not re-ask on every ordinary
+        run.
 
-     **If `sdlc.mode` is not set yet**, proceed with this phase regardless of
-     how the skill was invoked — this is the normal first-run case.
+     b. **`sdlc.mode` is absent, but `sdlc.linear.team` and
+        `sdlc.notion.home_directory` both already hold real, non-placeholder
+        values** (same placeholder rules as Phase 1.2) — this workspace was
+        configured before modes existed and is already running against Notion
+        and Linear. Its mode is not an open question. Persist
+        `"mode": "remote"` to `.claude/settings.local.json` (read-modify-write,
+        per Phase 2.3), tell the user only that the existing Notion + Linear
+        setup was kept, and **skip the rest of this phase**. Ask nothing.
+        Probe nothing — a transient Notion or Linear auth failure must never
+        turn into a recommendation to abandon a working remote workspace.
+
+        The one exception: if `--switch-mode` was passed, still persist
+        `"mode": "remote"` as the workspace's current value, then continue
+        with this phase so the user can deliberately move off it. Phase 0.4
+        compares against that value.
+
+     c. **`sdlc.mode` is absent and the workspace is not already configured
+        for Notion + Linear** (either of those two values missing or still a
+        placeholder) — the genuine first run. Proceed with this phase
+        regardless of how the skill was invoked. `--switch-mode` is redundant
+        here and changes nothing: there is no previous mode to switch away
+        from, so the phase behaves exactly as it does without the flag and
+        Phase 0.4 has nothing to report.
+
+     d. **`sdlc.mode` is already set and the skill was invoked with
+        `--switch-mode`** — proceed with this phase to let the user pick a new
+        mode. Phase 0.4 covers what to tell them once they do.
 
 0.2. **Ask where SDLC artifacts should live**, using `AskUserQuestion`:
 
@@ -50,7 +75,13 @@ $ARGUMENTS — Optional mode flag:
        workspace. No external accounts, no setup. You can switch later by
        running `/sdlc-workspace-init --switch-mode`.
 
-     Write the answer to `sdlc.mode` as `"remote"` or `"local"` respectively.
+     Write the answer to `sdlc.mode` as `"remote"` or `"local"` respectively,
+     and **persist it to `.claude/settings.local.json` immediately** — before
+     Phase 1 runs. Create `.claude/` and the file first if they do not exist,
+     using the default structure in Phase 1.1, and otherwise read-modify-write
+     per Phase 2.3. Every later phase decides what to do by reading
+     `sdlc.mode`, so a choice held only in memory can be overwritten by
+     Phase 1.1's default.
 
 0.3. **Recommend local mode only on evidence of an actual reachability
      failure — never on absence of configuration.** Before asking, check
@@ -67,7 +98,9 @@ $ARGUMENTS — Optional mode flag:
        workspace and a Linear team you can point me at."
 
      - **Only if both `linear.team` and `notion.home_directory` already
-       hold real values**, attempt the Linear and Notion checks described
+       hold real values** — which, given Phase 0.1 case (b), means the user
+       explicitly asked to reconsider with `--switch-mode` — attempt the
+       Linear and Notion checks described
        in Phase 5. If either fails, present **Local files** as the
        recommended option and say precisely which one failed — e.g.
        "Linear is configured but not reachable from this session," or
@@ -90,6 +123,12 @@ $ARGUMENTS — Optional mode flag:
 
      If `--switch-mode` was used but the user re-selects the same mode they
      already had, no migration note is needed — nothing changed.
+
+     If `--switch-mode` was used on a genuine first run (Phase 0.1 case (c)),
+     there is no previous value to compare against and no migration note
+     applies — nothing exists yet to leave behind. Report only which mode was
+     chosen and continue. The flag is never an error; on a first run it is
+     simply redundant.
 
 ### Phase 1 — Read and Assess
 
@@ -131,6 +170,13 @@ $ARGUMENTS — Optional mode flag:
      }
    }
    ```
+
+   **Mode:** the `"mode": "remote"` line above is a fallback for the case
+   where no mode has been established at all. **Never let it overwrite a mode
+   that already exists.** Use, in order: the value Phase 0.2 just wrote; then
+   the value already on disk; and only if neither exists, `"remote"`. A user
+   who chose **Local files** in Phase 0 must not find `remote` in the file
+   afterwards — that is the whole answer they were asked for.
 
    **Model override:** If the file exists but has no `model` key, set
    `"model": "claude-opus-4-7"` at the top level. If `model` already exists,
@@ -737,6 +783,15 @@ Snyk and Playwright are unaffected — they are local tools and Phase 6 still ru
 - This skill modifies the `sdlc` key and the `model` key inside
   `.claude/settings.local.json`. It must NEVER modify any other top-level
   keys in that file (e.g. `permissions`, `env`, etc.).
+- Phase 0's answer is persisted to `.claude/settings.local.json` the moment
+  it is given, and no later phase may write a different `sdlc.mode`.
+  Phase 1.1's `"mode": "remote"` default applies only when no mode exists
+  anywhere — neither in Phase 0's answer nor already on disk.
+- A workspace that predates `sdlc.mode` but already holds a real Linear team
+  and Notion home directory **is** `remote` by definition. Record that and
+  move on. Never re-interview it and never probe its integrations during
+  Phase 0 — existing workspaces must behave exactly as they did before modes
+  existed.
 - The `sdlc.templates` section must be seeded with the default values from
   step 1.1 if missing, but NEVER overwritten if it already exists. Those
   template IDs are shared across the organization.

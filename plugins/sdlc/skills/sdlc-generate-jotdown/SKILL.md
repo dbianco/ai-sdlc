@@ -14,7 +14,9 @@ detailed technical blueprint that coding agents will use.
 $ARGUMENTS — (optional) The primary source. In `remote` mode: a Scoping Doc
 Notion URL, a Linear issue (URL or `XXX-NNN`), a Slack thread URL, a Notion page
 URL, or free text. In `local` mode: a feature reference (`001`, `order-export`,
-`001-order-export`) or free text. If omitted, the skill will ask.
+`001-order-export`), or free text — free text allocates a new feature directory
+to hold the Jot Down, so local mode never requires a PRD or Scoping Doc to have
+been generated first. If omitted, the skill will ask.
 
 ## Procedure
 
@@ -73,6 +75,20 @@ URL, or free text. In `local` mode: a feature reference (`001`, `order-export`,
    | Empty / not provided | No source | Ask the user for a description of what needs to be built or fixed |
 
    Extract whatever context is available from the source material.
+
+   **Bind `feature` before generation begins — `local` mode.** Every path
+   through the table above must end with a bound `feature`, because step 13
+   writes into it:
+
+   - A feature ref binds it via `resolve_feature`.
+   - Free text, or no source at all, binds it via `new_feature(<feature name>)`.
+     Allocate it once the feature name is settled — after step 7, where the
+     remaining gaps are filled — and tell the user which directory was
+     allocated (e.g. "Writing to `.sdlc/features/003-order-export/`"). Any
+     documents that later land in that directory belong to the same feature.
+
+   In `remote` mode nothing is allocated here: `write_doc` creates the page in
+   step 13.
 
 5. **Check whether the source carries a Scoping Doc and a PRD.**
 
@@ -135,8 +151,9 @@ URL, or free text. In `local` mode: a feature reference (`001`, `order-export`,
       (mentions UI, components, screens, pages, frontend, React, etc.), ask:
       "Is there a Data UI Inventory for this work?" If yes: in `remote` mode,
       collect the Notion URL and fetch it via `notion-fetch`; in `local` mode,
-      call `read_doc(feature, data-ui-inventory)` if a feature was resolved in
-      step 4, otherwise ask for the file path and read it directly. If the
+      call `read_doc(feature, data-ui-inventory)` if step 4 resolved an
+      existing feature ref; otherwise ask for the file path and read it
+      directly — a feature allocated from free text has no documents yet. If the
       context does not suggest frontend work, skip silently.
 
    d. **Google Tag Manager (GTM) Events** — if the source context suggests
@@ -371,7 +388,22 @@ URL, or free text. In `local` mode: a feature reference (`001`, `order-export`,
     Do NOT invent a threshold silently. An invented number is worse than a
     flagged gap, because it looks agreed.
 
-13. **Write the Jot Down.** Call `write_doc(feature, jotdown, <content>)`.
+13. **Write the Jot Down.** Call `write_doc(feature, jotdown, <content>)`,
+    where `feature` is the one bound in step 4 — resolved from a feature ref,
+    or allocated by `new_feature` when the source was free text.
+
+    **When to call it:**
+
+    - In `remote` mode, call it now, for the milestone just drafted. Each
+      selected milestone is its own Notion page, so this step runs once per
+      milestone.
+    - In `local` mode, **do not call it yet if any selected milestone is still
+      undrafted.** Go to step 14, which sends you back for the next one. Call
+      `write_doc` exactly once, after the last milestone's section exists, with
+      every section assembled into a single document. One feature directory
+      holds one Jot Down: writing after each milestone would target the same
+      path twice and trip the contract's "target already exists — ask before
+      overwriting" prompt on the second pass.
 
     In `remote` mode this creates the Notion page titled
     `Jot Down: <Feature Name> (Milestone N: <Name>)`, or
@@ -399,10 +431,14 @@ URL, or free text. In `local` mode: a feature reference (`001`, `order-export`,
     **If `docs_database` is empty:** Fall back to creating a flat page under
     the configured `home_directory`.
 
-14. **Repeat steps 9–12a** for each remaining selected milestone. In `remote`
-    mode, step 13 also repeats, producing one Notion page per milestone. In
-    `local` mode, step 13 runs once, after every milestone's section has been
-    drafted, writing all of them into the single `jotdown.md`.
+14. **Draft the milestones that remain.** If any selected milestone has not
+    been drafted yet, return to step 9 and repeat steps 9–12a for the next one.
+
+    - In `remote` mode, step 13 then runs again for that milestone, producing
+      one Notion page per milestone.
+    - In `local` mode, step 13 has not run yet. Once the last milestone is
+      drafted, run step 13 a single time, writing every milestone section into
+      the one `jotdown.md`, each under its own `### Milestone N of M` heading.
 
 15. **Return the artifact reference(s).** In `remote` mode, return all Notion
     page URLs, listed by milestone. In `local` mode, return the single file

@@ -273,6 +273,11 @@ Can be a few sentences or a detailed brief.
 6. **Write the PRD.** Call `new_feature(<feature name>)` to allocate the
    feature, then `write_doc(feature, prd, <content>)`.
 
+   In `remote` mode `new_feature` creates nothing by itself — it only binds the
+   feature name that titles the page `write_doc` then creates. This skill does
+   not touch Linear at all: no project, no issue. Linear enters the pipeline
+   only at `/sdlc-generate-task-breakdown`.
+
    In `remote` mode this creates the Notion page titled `PRD: <Feature Name>`
    with the properties described below. In `local` mode it writes
    `.sdlc/features/NNN-slug/prd.md` and no properties are needed — the

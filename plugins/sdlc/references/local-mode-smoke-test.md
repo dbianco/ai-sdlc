@@ -45,6 +45,28 @@ not behavior.
 - [ ] The task file's `status:` is now `in_review`.
 - [ ] **No leakage.** `grep -ri notion /tmp/sdlc-smoke/.sdlc` returns nothing.
 
+## Mode switch
+
+Run these last — the first one leaves the workspace in `remote` mode until the
+final check puts it back.
+
+- [ ] **An ordinary re-run does not re-ask.** Run `/sdlc-workspace-init` with
+      no arguments. It does **not** ask where artifacts should live; the mode
+      already on disk is kept, and the summary still prints the "To switch
+      artifact stores later" line.
+- [ ] **The flag reopens the choice.** Run
+      `/sdlc-workspace-init --switch-mode`. Phase 0 asks again. Choose
+      **Notion + Linear**.
+- [ ] It states that nothing is migrated — existing `.sdlc/` files stay on
+      disk and are not copied to Notion or Linear.
+- [ ] `.claude/settings.local.json` now contains `"mode": "remote"`, and
+      `.sdlc/features/001-<slug>/` still holds every file created above,
+      unchanged.
+- [ ] **Switch back.** Run `/sdlc-workspace-init --switch-mode` again and
+      choose **Local files**. The file reads `"mode": "local"` again, and
+      `.sdlc/` is still intact. `/sdlc-implement-task 001-001` resolves the
+      same task file as before.
+
 ## Teardown
 
 `rm -rf /tmp/sdlc-smoke`

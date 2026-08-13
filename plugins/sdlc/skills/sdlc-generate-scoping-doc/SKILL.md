@@ -120,7 +120,11 @@ PRD. In `local` mode, a feature reference — `001`, `order-export`, or
      adjust, or add more.
 
    The final milestone list is used in Section 3.1 of the scoping doc and
-   drives the downstream Jot Down generation (one Jot Down per milestone).
+   drives the downstream Jot Down generation. How it lands depends on the
+   mode: in `remote` mode each milestone becomes its own Jot Down page; in
+   `local` mode one feature directory holds one `jotdown.md`, so the selected
+   milestones are consolidated into that single document, each under its own
+   heading.
 
 8. **Surface architectural decisions.** Before generating, identify any
    design choices where multiple valid approaches exist. Common examples:

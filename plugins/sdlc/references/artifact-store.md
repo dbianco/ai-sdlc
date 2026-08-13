@@ -34,7 +34,7 @@ Linear issue identifier.
 
 | Operation | Local | Remote |
 | --------- | ----- | ------ |
-| `new_feature(name)` | Create `.sdlc/features/NNN-slug/`, where NNN is the lowest unused three-digit number and slug is the kebab-cased name | Create the Notion page and Linear project |
+| `new_feature(name)` | Create `.sdlc/features/NNN-slug/`, where NNN is the lowest unused three-digit number and slug is the kebab-cased name | Bind the feature to its name — that name titles the Notion page `write_doc` then creates. Create nothing else: no second page, and never a Linear project. Linear is touched only where it always was, by `generate-task-breakdown` |
 | `resolve_feature(ref)` | Match ref against directory names under `.sdlc/features/`. On no match, list what exists and ask. On multiple matches, ask | Fetch the Notion page by URL or ID |
 | `read_doc(feature, kind)` | Read `<feature-dir>/<kind>.md`. Missing file is a reportable absence, not a crash | `notion-fetch` the page |
 | `write_doc(feature, kind, content)` | Write `<feature-dir>/<kind>.md`; return the path relative to the workspace root | Create the page in the configured docs database; return its URL |
@@ -42,7 +42,7 @@ Linear issue identifier.
 | `list_tasks(feature)` | Read every `<feature-dir>/tasks/*.md` except `README.md`; parse front-matter | Linear `list_issues` for the project |
 | `create_task(feature, task)` | Write `<feature-dir>/tasks/<NNN>-<slug>.md` using the task file format below | Linear `save_issue` |
 | `read_task(ref)` | Locate the task file by composite id or path; parse front-matter and body | Linear `get_issue` |
-| `update_task_status(ref, status, reason?)` | Rewrite the `status:` front-matter field in place. When `status` is `blocked` and `reason` is given, also write it to `blocked_reason:`. Leave everything else byte-identical | Update the Linear issue status |
+| `update_task_status(ref, status, reason?)` | Rewrite the `status:` front-matter field in place. When `status` is `blocked` and `reason` is given, also write it to `blocked_reason:`. When `status` is anything other than `blocked`, delete any `blocked_reason:` line the file already carries — a reason must never outlive the blocked state it explains. Leave everything else byte-identical | Update the Linear issue status |
 | `create_epic(feature)` | Write `<feature-dir>/tasks/README.md` — the index holding sequencing, critical path, and the requirement coverage table | Create the Linear parent issue |
 | `select_grouping()` | Return the milestone name to stamp into each task's `milestone:` field. Take the names from the source documents. If the documents define no milestones, use a single milestone named after the feature. Ask the user nothing | Prompt for the Linear project, then map or create milestones |
 
@@ -110,7 +110,7 @@ labels: [ai-sdlc, typescript]
 | `parallelizable` | no | `true` is the `[P]` marker |
 | `estimate` | yes | PERT hours |
 | `labels` | no | |
-| `blocked_reason` | no | Short free text recording why the task was blocked; present only when `status:` is `blocked` |
+| `blocked_reason` | no | Short free text recording why the task was blocked; present only when `status:` is `blocked`. `update_task_status` removes it as soon as the task leaves that state |
 
 Status values mirror Linear's, so reporting language is identical in both modes.
 
