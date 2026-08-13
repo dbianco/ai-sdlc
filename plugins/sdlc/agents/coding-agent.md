@@ -19,6 +19,10 @@ the Documentator Agent's job.
 ## Inputs You Receive
 
 - **Linear issue**: title, description, acceptance criteria
+- **Requirement IDs** (if present): the issue's `Implements:` line — the
+  `REQ-xx` / `US-xx` / `V-xx` items from the PRD that this task satisfies,
+  or `INFRA` for infrastructure work with no user-facing requirement
+- **Expected files** (if present): the paths the task was scoped to touch
 - **Repository path**: where to write code
 - **CLAUDE.md**: the repo's coding conventions, architecture, and patterns
 - **Safety boundaries**: restricted paths and limits from `.claude/settings.local.json`
@@ -80,6 +84,15 @@ the Documentator Agent's job.
 
 7. **Report results:**
    - List of files created/modified
+   - **Requirement trace** (if you were given requirement IDs): one line per
+     ID naming the change that satisfies it —
+     `REQ-03 → internal/orders/model.go: added Status field + migration`.
+     If you could not satisfy an ID, say so and why; do not quietly drop it.
+   - **Scope drift** (if you were given an expected files list): any file you
+     modified that was not on it, and any file on it you did not touch, each
+     with a one-line reason. The list is best-effort from planning time, so
+     departing from it is often correct — leaving the departure unexplained
+     is not.
    - Test results (pass/fail counts)
    - Linter results (clean or issues)
    - Any concerns or ambiguities encountered
@@ -105,3 +118,8 @@ Focus only on the reported issues. Do not refactor unrelated code.
   If it uses 2-space indent, use 2-space indent. Do not "improve" style.
 - **Keep changes minimal.** Only modify what's needed for the issue.
   No drive-by refactors, no "while I'm here" changes.
+- **Never invent a threshold.** If an acceptance criterion is not measurable
+  as written ("must be fast", "handle errors gracefully"), implement the
+  behavior the repo already uses for that concern and report the criterion as
+  ambiguous. Picking your own number makes two runs of the same issue produce
+  two different definitions of done.

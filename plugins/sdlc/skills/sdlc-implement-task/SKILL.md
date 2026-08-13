@@ -25,6 +25,10 @@ $ARGUMENTS — A Linear issue identifier (e.g. `YAL-123`).
    - Sub-issues (list them with their status)
    - Dependencies (ensure they are completed — abort if not)
    - Labels (to identify target repository, language, and domain)
+   - The `Implements:` line (requirement IDs such as `REQ-03, US-02`) and the
+     expected **Files** list, both written by `/sdlc-generate-task-breakdown`.
+     Older issues predate these fields — if either is absent, continue without
+     it and note the omission in the final report rather than guessing.
 
    After reading labels, build an initial `domain_skills` candidate list by
    matching labels against the mapping table in
@@ -126,6 +130,8 @@ $ARGUMENTS — A Linear issue identifier (e.g. `YAL-123`).
 
    Pass to the Coding Agent:
    - The Linear issue details (title, description, acceptance criteria)
+   - The requirement IDs from the issue's `Implements:` line, and the
+     expected **Files** list, when the issue carries them
    - The repository path and CLAUDE.md content
    - The workspace safety boundaries
    - The `domain_context` block (if non-empty) as "Domain Engineering Standards"
@@ -229,6 +235,13 @@ $ARGUMENTS — A Linear issue identifier (e.g. `YAL-123`).
     - Security scan results (status, findings remediated, FPs documented) —
       or a note that the scan was skipped at the user's request
     - Files modified (list)
+    - **Requirement trace** (when the issue carried an `Implements:` line):
+      each requirement ID and the change that satisfies it, as reported by the
+      Coding Agent. Call out any ID with no corresponding change, and any file
+      modified that was not in the issue's expected **Files** list. Neither is
+      automatically wrong — the breakdown's file list is best-effort — but an
+      unexplained drift between planned and actual scope is the thing a
+      reviewer most needs pointed at.
     - Number of iteration cycles needed
     - Ready for human review: `git diff main..HEAD`
 
