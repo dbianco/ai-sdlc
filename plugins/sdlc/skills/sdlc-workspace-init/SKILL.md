@@ -21,6 +21,38 @@ No arguments required. This skill is a guided wizard.
 
 ## Procedure
 
+### Phase 0 — Choose the Artifact Store
+
+0.1. **If `sdlc.mode` is already set in `.claude/settings.local.json`, skip this
+     phase.** Do not re-ask on every run.
+
+0.2. **Ask where SDLC artifacts should live**, using `AskUserQuestion`:
+
+     "Where should this workspace keep its PRDs, Scoping Docs, Jot Downs, and
+     tasks?"
+
+     - **Notion + Linear** — documents become Notion pages and tasks become
+       Linear issues. Requires a Notion workspace and a Linear team.
+     - **Local files** — everything is markdown under `.sdlc/` in this
+       workspace. No external accounts, no setup. You can switch later by
+       re-running this skill.
+
+     Write the answer to `sdlc.mode` as `"remote"` or `"local"` respectively.
+
+0.3. **Recommend local mode when the tools are unreachable.** Before asking,
+     attempt the Linear and Notion checks described in Phase 5. If either
+     fails, present **Local files** as the recommended option and say why:
+     "Notion and/or Linear are not reachable from this session, so remote mode
+     cannot be configured right now. Local mode works immediately and needs no
+     accounts."
+
+     Never silently choose for the user — recommend, then let them answer.
+
+0.4. **If the user switches an existing workspace from `local` to `remote`**,
+     tell them plainly: "Your existing `.sdlc/` artifacts stay on disk. They
+     are not copied to Notion or Linear — there is no migration. New documents
+     will be created in Notion from now on."
+
 ### Phase 1 — Read and Assess
 
 1.1. **Read `.claude/settings.local.json`** from the project root directory. If
@@ -34,6 +66,7 @@ No arguments required. This skill is a guided wizard.
    {
      "model": "claude-opus-4-7",
      "sdlc": {
+       "mode": "remote",
        "workspace": {
          "name": ""
        },
@@ -102,6 +135,11 @@ No arguments required. This skill is a guided wizard.
 
 2.2. **For each field that needs setup, ask the user:**
 
+   **In `local` mode, skip the Linear team, Notion home directory, Notion docs
+   database, and all four template ID fields.** None of them apply — local mode
+   uses each skill's inline document structure. Still collect the workspace name
+   and the repository list.
+
    **Workspace name** (only if missing or empty):
    Propose the current directory name as the default: "I'll use
    `<dirname>` as the workspace name. Is that correct, or would you like a
@@ -169,6 +207,9 @@ No arguments required. This skill is a guided wizard.
    - Write the file back with 2-space indented JSON
 
 ### Phase 3 — Create SDLC Documents Database (If Needed)
+
+Skip this phase entirely when `sdlc.mode` is `local`. There is no Notion
+database to create.
 
 3.1. **Ensure the SDLC Documents database exists.** This step is idempotent —
    it must never create a duplicate database.
@@ -260,6 +301,10 @@ No arguments required. This skill is a guided wizard.
       "Workspace CLAUDE.md — OK" and move on.
 
 ### Phase 5 — Verify MCP Status (Always Runs)
+
+Skip this phase entirely when `sdlc.mode` is `local`. Report "not required in
+local mode" for Notion, Linear, and Figma in the Phase 8 summary instead.
+Snyk and Playwright are unaffected — they are local tools and Phase 6 still runs.
 
 5.1. **Tell the user what is about to happen:**
    "I'll now check MCP connectivity. If a service is not yet authenticated,
@@ -529,6 +574,41 @@ No arguments required. This skill is a guided wizard.
     If ALL recommended plugins are either installed or skipped, report:
     "All relevant plugins are installed."
 
+### Phase 7b — Scaffold the Local Artifact Store (Local Mode Only)
+
+7b.1. **Skip this phase entirely when `sdlc.mode` is `remote`.**
+
+7b.2. **Create `.sdlc/features/`** in the workspace root if it does not exist.
+
+7b.3. **Create `.sdlc/README.md`** if it does not exist, with this content:
+
+      ````markdown
+      # SDLC Artifacts
+
+      This workspace runs the `sdlc` plugin in local mode. Every PRD, Scoping
+      Doc, Jot Down, Data UI Inventory, and task lives here as markdown instead
+      of in Notion and Linear.
+
+      ```
+      features/
+      └── 001-example-feature/
+          ├── prd.md
+          ├── scoping-doc.md
+          ├── jotdown.md
+          └── tasks/
+              ├── README.md          # sequencing, critical path, coverage
+              └── 001-first-task.md
+      ```
+
+      These files are the specification — commit them.
+
+      To switch to Notion and Linear, re-run `/sdlc-workspace-init`. Existing
+      files stay on disk; they are not migrated.
+      ````
+
+7b.4. **Do not add `.sdlc/` to `.gitignore`.** These artifacts are meant to be
+      committed.
+
 ### Phase 8 — Summary (Always Runs)
 
 8.1. **Display the workspace configuration summary:**
@@ -537,6 +617,7 @@ No arguments required. This skill is a guided wizard.
     Workspace Configuration (.claude/settings.local.json)
     ─────────────────────────────────────────
     Default model:     <model value>
+    Artifact store:    <"Local files (.sdlc/)" or "Notion + Linear">
     Workspace name:    <value>
     Linear team:       <value>
     Notion home page:  <value>
@@ -624,8 +705,10 @@ No arguments required. This skill is a guided wizard.
   database no longer exists).
 - This skill is **strictly idempotent**. On repeat runs, only prompt for
   fields that are still placeholders or missing. Never re-ask a field that
-  already has a real value. Always run Phase 5 (MCP checks), Phase 6
-  (Snyk), Phase 7 (plugins), and Phase 8 (summary) regardless.
+  already has a real value. Always run Phase 6 (Snyk), Phase 7 (plugins), and
+  Phase 8 (summary) regardless. Phase 5 (MCP checks) also always runs in
+  `remote` mode; it is skipped entirely in `local` mode, per Phase 5's own
+  instructions.
 - When writing `.claude/settings.local.json`, always read the full file first,
   parse it, modify only `sdlc.*` keys and `permissions.allow` (for Snyk tools
   in Step D2), and write back with 2-space indentation.
