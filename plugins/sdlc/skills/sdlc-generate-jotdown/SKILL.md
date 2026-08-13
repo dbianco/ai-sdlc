@@ -98,6 +98,9 @@ been generated first. If omitted, the skill will ask.
 
    In `local` mode: call `read_doc(feature, scoping-doc)` and
    `read_doc(feature, prd)`. Treat whichever exist as the source documents.
+   Make these two calls only when step 4 resolved an existing feature ref — a
+   feature allocated from free text is not created until after step 7 and has
+   no documents to read, so skip this step entirely on that path.
 
    If both documents are present in either mode:
 

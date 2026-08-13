@@ -47,7 +47,7 @@ not behavior.
 
 ## Mode switch
 
-Run these last — the first one leaves the workspace in `remote` mode until the
+Run these last — the second one leaves the workspace in `remote` mode until the
 final check puts it back.
 
 - [ ] **An ordinary re-run does not re-ask.** Run `/sdlc-workspace-init` with
