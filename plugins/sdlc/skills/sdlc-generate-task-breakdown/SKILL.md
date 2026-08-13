@@ -34,11 +34,18 @@ Jot Down. In `local` mode, a feature reference — `001`, `order-export`, or
 2. **Establish task grouping.** Call `select_grouping()`.
 
    In `remote` mode this lists Linear projects via
-   `mcp__claude_ai_Linear__list_projects`, requires the user to pick one via
-   `AskUserQuestion`, then lists milestones via
-   `mcp__claude_ai_Linear__list_milestones` and maps or creates them with
-   `mcp__claude_ai_Linear__save_milestone`. Every issue must belong to a project
-   and a milestone. Do not proceed until both are chosen.
+   `mcp__claude_ai_Linear__list_projects` and requires the user to pick one via
+   `AskUserQuestion`, then lists milestones for that project via
+   `mcp__claude_ai_Linear__list_milestones` and maps or creates them:
+
+   - If the Jot Down covers a specific milestone from the Scoping Doc, ask the
+     user which Linear milestone to assign issues to.
+   - If the Linear project has no milestones yet, create them from the Scoping
+     Doc milestones using `mcp__claude_ai_Linear__save_milestone`. Ask the user
+     to confirm before creating.
+
+   Every issue must belong to a project and a milestone. Do not proceed until
+   both are chosen.
 
    In `local` mode there is no project and no picker. Take the milestone names
    from the source documents and stamp each task's `milestone:` field. If the
@@ -51,7 +58,9 @@ Jot Down. In `local` mode, a feature reference — `001`, `order-export`, or
    without any that are missing, noting the omission).
 
    In `remote` mode, follow the reference links inside the Jot Down to reach the
-   Scoping Doc and PRD, as before.
+   Scoping Doc and PRD, as before. For the Data UI Inventory, search for one
+   linked from the PRD or Scoping Doc, or search Notion for one matching the
+   feature name.
 
    Use each document for what it carries:
    - **Jot Down** — the primary input.
@@ -211,6 +220,9 @@ Jot Down. In `local` mode, a feature reference — `001`, `order-export`, or
    required except `depends_on`, `parallelizable`, and `labels`. The
    `Implements:` line becomes the `implements:` front-matter list, and the
    expected file list becomes `files:`; `[P]` becomes `parallelizable: true`.
+   Every newly created task file starts at `status: todo` — `/sdlc-implement-task`
+   reads that field to resolve dependencies, so it must be present and correct
+   from the moment the file is written.
 
 10. **Report to the user:**
     - Total number of tasks created, grouped by milestone
