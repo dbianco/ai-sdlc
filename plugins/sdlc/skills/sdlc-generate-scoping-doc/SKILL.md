@@ -71,8 +71,11 @@ PRD. In `local` mode, a feature reference — `001`, `order-export`, or
    - List **every single one** to the user, grouped by section, including the
      exact marker text and its location in the document.
    - Tell the user: "The PRD has unresolved items that must be completed before
-     a Scoping Document can be generated. Please resolve them in Notion and
-     re-run this skill."
+     a Scoping Document can be generated. Please resolve them and re-run this
+     skill." In `remote` mode, direct them to resolve the items in Notion —
+     the PRD page fetched in step 3. In `local` mode, direct them to the PRD
+     file instead — `doc_link(feature, prd)` (typically
+     `<feature-dir>/prd.md`).
    - **STOP. Do NOT proceed.** Do not generate a partial scoping doc.
 
    **If only non-blocking items exist:**
@@ -159,7 +162,7 @@ PRD. In `local` mode, a feature reference — `001`, `order-export`, or
    > If this feature does NOT need a feature flag, reply 'none'."
 
    Record the user's answers. These will be written into the Scoping Doc
-   (Section 8) and flow downstream into the Jot Down and Linear issues so
+   (Section 8) and flow downstream into the Jot Down and downstream tasks so
    that coding agents can assume the split already exists in Split.io.
 
    If the user replies "none", omit Section 8 from the output.
@@ -262,13 +265,15 @@ PRD. In `local` mode, a feature reference — `001`, `order-export`, or
 
 ### Retrospective
 
-14. **Spawn the Skill Retrospective Agent.** After the Notion page is created
-    and URL returned, spawn a sub-agent using the instructions in
+14. **Spawn the Skill Retrospective Agent.** After the Scoping Doc is written
+    and its artifact reference returned — the Notion page in `remote` mode, or
+    the file in `local` mode — spawn a sub-agent using the instructions in
     `${CLAUDE_PLUGIN_ROOT}/agents/skill-retrospective.md`.
 
     Pass to the agent:
     - **Skill name**: `sdlc-generate-scoping-doc`
-    - **What was built**: the scoping doc title and Notion URL
+    - **What was built**: the scoping doc title and its artifact reference —
+      the Notion URL in `remote` mode, or the file path in `local` mode
     - **Run summary**: key decisions made (milestones chosen, architectural
       decisions resolved or left pending, feature flag details), any user
       corrections or pushback during the run, sections that required iteration

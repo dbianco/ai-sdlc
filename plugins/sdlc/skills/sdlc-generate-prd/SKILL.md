@@ -1,14 +1,16 @@
 ---
 name: sdlc-generate-prd
-description: Generate a Product Requirements Document in Notion from a feature description
+description: Generate a Product Requirements Document from a feature description
 disable-model-invocation: true
 ---
 
 # /sdlc-generate-prd
 
-Generate a Product Requirements Document in Notion under the workspace's
-configured home directory. The PRD follows TextraAI's standard 11-section template
-with numbered IDs for cross-referencing in engineering workflows.
+Generate a Product Requirements Document from a feature description. In
+`remote` mode it is created as a Notion page under the workspace's configured
+home directory; in `local` mode it is written to `.sdlc/features/`. The PRD
+follows TextraAI's standard 11-section template with numbered IDs for
+cross-referencing in engineering workflows.
 
 ## Input
 
@@ -84,7 +86,7 @@ Can be a few sentences or a detailed brief.
 5. **Generate the PRD** with this structure. Every item that gets an ID must
    use the specified prefix and sequential numbering (G-1, G-2, ...; NG-1;
    US-01, US-02, ...; REQ-01; V-01; OQ-1). IDs are mandatory — they enable
-   traceability across Linear tickets, scoping docs, and design reviews.
+   traceability across downstream tasks, scoping docs, and design reviews.
 
    ---
 
@@ -290,7 +292,8 @@ Can be a few sentences or a detailed brief.
    **If `docs_database` is empty:** Fall back to creating a flat page under
    the configured `home_directory`.
 
-   When creating the page, use Notion's enhanced markdown format to produce:
+   **In `remote` mode**, when creating the page, use Notion's enhanced
+   markdown format to produce:
    - Callout blocks for the usage instructions, context box, and business case
      warning (matching the template's callout styles)
    - Tables with header rows for all structured data (Customer Pipeline, Goals,
@@ -329,7 +332,7 @@ Can be a few sentences or a detailed brief.
   explicitly note the omission so downstream consumers know it was a deliberate
   decision.
 - All IDs must be sequential within their section and never reused. These IDs
-  are referenced by the scoping doc, jot down, and Linear task breakdown skills.
+  are referenced by the scoping doc, jot down, and task breakdown skills.
 - Tables are preferred over prose for structured data. Use prose only for
   narrative sections (Problem Statement, Business Case narratives).
 - Acceptance criteria in Requirements (Section 8) must be checkbox items so they
