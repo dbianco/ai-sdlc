@@ -117,8 +117,34 @@ $ARGUMENTS — A Notion URL or page ID pointing to an existing Jot Down document
      document and section. Include specific file paths, function names, and
      patterns to follow. For frontend tasks from the Data UI Inventory,
      reference the component name, parent, and library components.
+   - **Implements**: The upstream requirement IDs this task satisfies —
+     `REQ-xx`, `US-xx`, and `V-xx` from the PRD. Write them as a literal
+     line in the issue description:
+
+     ```
+     Implements: REQ-03, US-02, V-07
+     ```
+
+     Every task MUST carry at least one ID. A task that implements no stated
+     requirement is either scope creep or a requirement missing from the PRD —
+     in both cases, stop and resolve it with the user rather than inventing a
+     justification. The single exception is infrastructure work with no user-
+     facing requirement (build config, CI wiring); mark those
+     `Implements: INFRA` so they are distinguishable from unmapped tasks.
+   - **Files**: The exact paths the task is expected to create or modify,
+     relative to the repository root (e.g. `internal/orders/model.go`,
+     `apps/menu/src/components/OrderStatus.tsx`). Best-effort is fine — this
+     is what makes the task reviewable and lets step 8 detect file collisions.
+     Use a directory path only when the exact filename genuinely cannot be
+     known yet, and say why.
    - **Acceptance criteria**: Testable conditions for "done". Pull from
      PRD user stories (US-xx) and requirements (REQ-xx) where applicable.
+     Each criterion must be measurable as written — a quality adjective
+     (`fast`, `secure`, `robust`, `reliable`, `intuitive`) with no number,
+     threshold, or observable behavior attached is not an acceptance
+     criterion. Carry the threshold down from the Jot Down; do not invent one.
+   - **Parallelizable**: `[P]` if this task shares no file with any other task
+     in the same milestone and has no unmet dependency. Omit otherwise.
    - **PERT estimate**: Optimistic / Most Likely / Pessimistic (in hours)
    - **Dependencies**: Which other tasks must be completed first.
    - **Repository**: Which repo from `.claude/settings.local.json` this task belongs to.
@@ -127,6 +153,16 @@ $ARGUMENTS — A Notion URL or page ID pointing to an existing Jot Down document
 
 8. **Sequence the tasks** using dependency order. Identify the critical path.
    Group tasks by their Linear milestone.
+
+   Then resolve file collisions using the **Files** list from step 7. Any two
+   tasks that touch the same file MUST be sequenced, never marked `[P]` —
+   either give one a dependency on the other, or merge them if the split was
+   artificial. Two agents editing one file in parallel produce conflicting
+   edits and a merge the human has to untangle, which is exactly the
+   inconsistency this breakdown exists to prevent.
+
+   Strip `[P]` from any task that fails this check, and report the collisions
+   you resolved in step 11.
 
 9. **Create a parent Linear issue** in the configured team **and project**:
    - Title: `[Feature Name] — Implementation`
@@ -147,6 +183,22 @@ $ARGUMENTS — A Notion URL or page ID pointing to an existing Jot Down document
     - Critical path and estimated timeline (using PERT expected values)
     - Link to the parent Linear issue
     - Any tasks where you were uncertain about scope or estimates
+    - **Requirement coverage table** — one row per `REQ-xx`, `US-xx`, and
+      `V-xx` found in the PRD:
+
+      | Requirement | Covered by | Notes |
+      | ----------- | ---------- | ----- |
+      | REQ-03      | YAL-124, YAL-127 | |
+      | US-05       | — | no task created |
+
+      Follow the table with two explicit counts: **requirements with no
+      task** and **tasks with no requirement** (`Implements: INFRA` does not
+      count as unmapped). Both should be zero. If either is non-zero, list
+      the offenders by ID and tell the user which side needs fixing — a
+      missing task means the breakdown is incomplete, a missing requirement
+      means the PRD is.
+    - **File collisions resolved** in step 8, if any: which tasks shared a
+      file and how you sequenced them.
 
 ## Task Decomposition Rules
 
@@ -155,11 +207,17 @@ $ARGUMENTS — A Notion URL or page ID pointing to an existing Jot Down document
 - Feature flag setup is its own task.
 - Documentation updates are handled by the Documentator Agent, not as tasks.
 - Never create a task that spans multiple repositories.
+- Split along file boundaries wherever the work allows it. A split that leaves
+  two tasks editing the same file has not reduced the risk of the work, it has
+  only hidden it behind two issue IDs.
 
 ## Important
 
 - Task descriptions must be detailed enough for `/sdlc-implement-task` to execute
   without additional context beyond the task description + repo CLAUDE.md.
+- The `Implements:` line is read downstream: `/sdlc-implement-task` passes it to
+  the Coding Agent, which reports back which requirement each change satisfies.
+  Keep the IDs exact — a typo breaks the trace silently.
 - The validation in step 5 ensures no "NEEDS HUMAN INPUT" sections reach task
   creation. If validation was somehow bypassed, STOP and re-run validation.
 - Estimate honestly. A 2-hour optimistic / 40-hour pessimistic task is a sign

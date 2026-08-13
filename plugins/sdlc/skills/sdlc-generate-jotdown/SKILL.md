@@ -291,6 +291,19 @@ or free text description. If omitted, the skill will ask.
     Key test scenarios. Include acceptance criteria — testable conditions
     for "done" (embedded directly in this section).
 
+    Every acceptance criterion must be **measurable**: a reader must be able
+    to write a test that returns pass or fail without asking anyone what the
+    criterion meant. Quality adjectives are not criteria — `fast`, `slow`,
+    `scalable`, `secure`, `robust`, `intuitive`, `reliable`, `performant`,
+    `user-friendly`, `efficient`, and `simple` must each carry a number, a
+    threshold, or a concrete observable behavior.
+
+    | Not acceptable            | Acceptable                                         |
+    | ------------------------- | -------------------------------------------------- |
+    | Endpoint is fast          | Endpoint responds in < 200 ms at p95 under 50 rps  |
+    | Errors handled gracefully | 4xx returns the repo's standard error envelope; 5xx is logged with the request ID |
+    | Export is reliable        | Export of 10k rows completes without truncation and is byte-identical on retry |
+
     ### 11. Frontend Components
     **Include if a Data UI Inventory was provided (from step 6c) or GTM
     events were selected (from step 6d).**
@@ -307,6 +320,31 @@ or free text description. If omitted, the skill will ask.
     List each event collected in step 6d. The event name is what will
     appear in the dataLayer push. The trigger is the user action that
     fires the event.
+
+12a. **Gate the draft on measurable acceptance criteria.** Before creating the
+    Notion page, re-read every acceptance criterion drafted in Section 10 (and
+    any embedded per-endpoint criteria in Section 4).
+
+    For each criterion, check whether it can be turned into a passing or
+    failing test as written. Flag any criterion that leans on an unquantified
+    quality adjective (the list in Section 10) or that describes an intent
+    rather than an observable outcome.
+
+    For each flagged criterion:
+    - If the source documents or the repo's CLAUDE.md supply the threshold
+      (an existing SLA, an established p95 target, a documented error
+      envelope), rewrite the criterion using that value and note the source
+      inline.
+    - If no threshold exists anywhere, ask the user for it via
+      `AskUserQuestion`. Batch these questions (up to 4 per call) and offer a
+      recommended default with a one-line rationale, so the answer is a
+      confirmation rather than an essay.
+    - Only if the user explicitly declines to set a threshold, mark the
+      criterion `⚠️ NEEDS HUMAN INPUT: no measurable threshold agreed` and
+      leave it visible in the document.
+
+    Do NOT invent a threshold silently. An invented number is worse than a
+    flagged gap, because it looks agreed.
 
 13. **Create the Notion page.**
     Title format: `Jot Down: <Feature Name> (Milestone N: <Name>)`.
