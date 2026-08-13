@@ -149,6 +149,11 @@ $ARGUMENTS — A Linear issue identifier (e.g. `YAL-123`).
      Coding Agent Task for iteration. Maximum 3 iteration cycles.
      If still failing after 3 cycles, report to user and abort.
 
+     Every iteration Task receives the same context as the original step 8
+     spawn — including the `domain_context` block when it is non-empty. The
+     domain standards must not drop on retries, or later iterations will be
+     held to weaker conventions than the first.
+
 11. **Ask whether to run the Security Agent.** The security scan is optional
     and the user decides on every run. Present using `AskUserQuestion`:
     - **Context**: the number of files modified by the Coding Agent, and the
