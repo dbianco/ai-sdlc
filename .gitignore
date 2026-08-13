@@ -10,4 +10,10 @@
 # Worktree artifacts (top-level workspace directories only)
 /workspace-*/
 
+# Claude Code worktrees (nested checkouts — never commit these)
+.claude/worktrees/
+
+# Subagent-driven-development scratch (ledgers, briefs, review packages)
+.superpowers/
+
 /presentations/!_deployment-manifests/**
