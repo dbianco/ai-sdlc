@@ -133,7 +133,9 @@ The wizard will:
 
 You can run `/sdlc-workspace-init` again at any time to check your workspace
 status. It is idempotent -- it only asks about missing values and always
-reports status. Running it again is also how you switch modes later (see
+reports status, and it will **not** re-ask which artifact store to use once
+that choice is made. To change it later, run
+`/sdlc-workspace-init --switch-mode` (see
 [Local Mode](#local-mode-no-notion-no-linear)).
 
 **Repeat this step for each workspace you created.** Each workspace gets its
@@ -263,11 +265,13 @@ truth.
 Every skill runs the same way in either mode: the same clarifying questions,
 the same validation gates. Only where the output lives changes.
 
-You can switch modes later by re-running `/sdlc-workspace-init` — it re-runs
-Phase 0 and updates `sdlc.mode` in `.claude/settings.local.json`. Switching
-does **not** migrate anything: files already written to `.sdlc/` stay on
-disk, and pages already written to Notion or Linear stay there. Pick the
-mode you want at the start of a feature, not partway through it.
+You can switch modes later by running `/sdlc-workspace-init --switch-mode` —
+an ordinary re-run of the wizard leaves an already-set mode alone, so this
+flag is the deliberate way to reopen that choice. It re-runs Phase 0 and
+updates `sdlc.mode` in `.claude/settings.local.json`. Switching does **not**
+migrate anything: files already written to `.sdlc/` stay on disk, and pages
+already written to Notion or Linear stay there. Pick the mode you want at
+the start of a feature, not partway through it.
 
 ## Skills Reference
 
@@ -279,7 +283,8 @@ new project directory. Idempotent — only asks for missing values, always
 reports status. Also where you choose the artifact backend — Notion +
 Linear or local files — see [Local Mode](#local-mode-no-notion-no-linear).
 
-**Input:** None (interactive wizard)
+**Input:** None for a normal run (interactive wizard); optional `--switch-mode`
+flag to reopen the artifact store choice
 **Output:** Updated `.claude/settings.local.json`, MCP connectivity report, next steps
 
 ---

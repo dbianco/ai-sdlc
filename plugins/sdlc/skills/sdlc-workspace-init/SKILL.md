@@ -17,14 +17,27 @@ reports MCP status and a full workspace summary.
 
 ## Input
 
-No arguments required. This skill is a guided wizard.
+$ARGUMENTS — Optional mode flag:
+
+- No arguments — run the guided wizard normally (default)
+- `--switch-mode` — re-open the artifact store choice (Phase 0) even though
+  `sdlc.mode` is already set, to deliberately move between Notion + Linear
+  and local files
 
 ## Procedure
 
 ### Phase 0 — Choose the Artifact Store
 
-0.1. **If `sdlc.mode` is already set in `.claude/settings.local.json`, skip this
-     phase.** Do not re-ask on every run.
+0.1. **If `sdlc.mode` is already set in `.claude/settings.local.json` and the
+     skill was invoked without `--switch-mode`, skip this phase.** Do not
+     re-ask on every ordinary run.
+
+     **If `sdlc.mode` is already set and the skill was invoked with
+     `--switch-mode`, proceed with this phase** to let the user pick a new
+     mode. Phase 0.4 covers what to tell them once they do.
+
+     **If `sdlc.mode` is not set yet**, proceed with this phase regardless of
+     how the skill was invoked — this is the normal first-run case.
 
 0.2. **Ask where SDLC artifacts should live**, using `AskUserQuestion`:
 
@@ -35,7 +48,7 @@ No arguments required. This skill is a guided wizard.
        Linear issues. Requires a Notion workspace and a Linear team.
      - **Local files** — everything is markdown under `.sdlc/` in this
        workspace. No external accounts, no setup. You can switch later by
-       re-running this skill.
+       running `/sdlc-workspace-init --switch-mode`.
 
      Write the answer to `sdlc.mode` as `"remote"` or `"local"` respectively.
 
@@ -64,10 +77,19 @@ No arguments required. This skill is a guided wizard.
 
      Never silently choose for the user — recommend, then let them answer.
 
-0.4. **If the user switches an existing workspace from `local` to `remote`**,
-     tell them plainly: "Your existing `.sdlc/` artifacts stay on disk. They
-     are not copied to Notion or Linear — there is no migration. New documents
-     will be created in Notion from now on."
+0.4. **If `--switch-mode` was used and the answer actually changes `sdlc.mode`**
+     from its previous value, tell the user plainly what does and does not
+     move:
+
+     - **`local` → `remote`:** "Your existing `.sdlc/` artifacts stay on disk.
+       They are not copied to Notion or Linear — there is no migration. New
+       documents will be created in Notion from now on."
+     - **`remote` → `local`:** "Your existing Notion pages and Linear issues
+       stay where they are. They are not copied into `.sdlc/` — there is no
+       migration. New documents will be written to `.sdlc/` from now on."
+
+     If `--switch-mode` was used but the user re-selects the same mode they
+     already had, no migration note is needed — nothing changed.
 
 ### Phase 1 — Read and Assess
 
@@ -618,8 +640,8 @@ Snyk and Playwright are unaffected — they are local tools and Phase 6 still ru
 
       These files are the specification — commit them.
 
-      To switch to Notion and Linear, re-run `/sdlc-workspace-init`. Existing
-      files stay on disk; they are not migrated.
+      To switch to Notion and Linear, run `/sdlc-workspace-init --switch-mode`.
+      Existing files stay on disk; they are not migrated.
       ````
 
 7b.4. **Do not add `.sdlc/` to `.gitignore`.** These artifacts are meant to be
@@ -643,6 +665,11 @@ Snyk and Playwright are unaffected — they are local tools and Phase 6 still ru
     PR max lines:      <value>
     Workspace CLAUDE:  <"OK" or "Created" or "Missing Lessons Learned">
     ```
+
+    Directly under this block, always print: "To switch artifact stores
+    later, run `/sdlc-workspace-init --switch-mode`." This is the only place
+    the flag needs to be advertised — it makes the switch path discoverable
+    on every run without re-asking on ordinary ones.
 
 8.2. **Display the MCP status table:**
 
