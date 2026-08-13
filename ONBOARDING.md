@@ -21,11 +21,11 @@ machine. Total time: ~15 minutes.
   - 🔍 *Check:* `ssh -T git@github.com` → should print `Hi <your-username>! You've successfully authenticated`
   - 📦 *Fix:* If it fails, add an SSH key to your GitHub account: https://docs.github.com/en/authentication/connecting-to-github-with-ssh
 
-- [ ] **Your team's Linear team name** — The task breakdown skill creates issues in your team's Linear board and needs to know which team to post to.
+- [ ] **Your team's Linear team name** *(remote mode only — skip if you plan to use local mode; see [Local Mode](#local-mode-no-notion-no-linear) below)* — The task breakdown skill creates issues in your team's Linear board and needs to know which team to post to.
   - 🔍 *Check:* It's the name shown at the top of your Linear workspace (e.g. `Commerce`, `Engagement`). Ask your EM if unsure.
   - 📦 *No install needed*
 
-- [ ] **A Notion page URL for AI-generated documents** — Every pipeline output (PRDs, Scoping Docs, Jot Downs) is saved as a Notion page. This URL tells the plugin where to put them.
+- [ ] **A Notion page URL for AI-generated documents** *(remote mode only — same skip applies)* — Every pipeline output (PRDs, Scoping Docs, Jot Downs) is saved as a Notion page. This URL tells the plugin where to put them.
   - 🔍 *Check:* Ask your PM or EM for the URL of your team's Notion space — usually a team or project page.
   - 📦 *No install needed*
 
@@ -118,22 +118,27 @@ claude
 ```
 
 The wizard will:
-1. **Configure `.claude/settings.local.json`** -- ask for your Linear team
-   name, Notion home page URL, and repository list (only asks for values that
-   are missing)
-2. **Verify MCP integrations** -- test connectivity to Linear, Notion, and
-   Figma. If an integration is not yet authenticated, your browser will open
-   for sign-in
-3. **Show a summary** -- report what is configured, what integrations are
+1. **Choose an artifact store** -- Notion + Linear (the default) or local
+   markdown files under `.sdlc/`, with no accounts required. See
+   [Local Mode](#local-mode-no-notion-no-linear) below for what this changes.
+2. **Configure `.claude/settings.local.json`** -- in remote mode, ask for your
+   Linear team name, Notion home page URL, and repository list (only asks for
+   values that are missing). In local mode, only the repository list is
+   asked -- Linear and Notion questions are skipped entirely.
+3. **Verify MCP integrations** -- test connectivity to Linear, Notion, and
+   Figma. This whole phase is skipped in local mode. If an integration is
+   not yet authenticated, your browser will open for sign-in
+4. **Show a summary** -- report what is configured, what integrations are
    connected, and what to do next
 
 You can run `/sdlc-workspace-init` again at any time to check your workspace
 status. It is idempotent -- it only asks about missing values and always
-reports status.
+reports status. Running it again is also how you switch modes later (see
+[Local Mode](#local-mode-no-notion-no-linear)).
 
 **Repeat this step for each workspace you created.** Each workspace gets its
-own `.claude/settings.local.json` with its own Linear team, Notion page, and
-repository list.
+own `.claude/settings.local.json` with its own mode, Linear team and Notion
+page (if remote), and repository list.
 
 ## Step 4 -- Initialize Your Repositories
 
@@ -155,8 +160,11 @@ Try generating a simple PRD:
 /sdlc-generate-prd Add a health check endpoint to the API gateway
 ```
 
-If Claude Code connects to Notion and asks clarifying questions, your setup
-is complete.
+In remote mode, if Claude Code connects to Notion and asks clarifying
+questions, your setup is complete. In local mode, it asks the same
+clarifying questions but writes the result to
+`.sdlc/features/001-<slug>/prd.md` instead — that file existing is your
+setup working.
 
 ## The Pipeline
 
@@ -213,6 +221,54 @@ Human Review ──────────────────────�
     └──────────────────────────────────────────────────────┘
 ```
 
+*This diagram shows the default remote-mode outputs. In local mode, every
+"Notion" and "Linear Issues" label above becomes a markdown file under
+`.sdlc/features/<NNN-slug>/` instead — the flow, the skills, and the
+validation gates are otherwise identical. See
+[Local Mode](#local-mode-no-notion-no-linear) below.*
+
+## Local Mode (No Notion, No Linear)
+
+Everything above describes the pipeline's default: PRDs, Scoping Docs, Jot
+Downs, and tasks read and write to Notion and Linear. If you don't have
+those set up, or just want to try the pipeline without creating any
+accounts, choose **local mode** instead.
+
+**The choice is made once, during Step 3 (`/sdlc-workspace-init`).** Phase 0
+of the wizard asks where artifacts should live:
+
+- **Notion + Linear** (default) — the flow described throughout this guide.
+- **Local files** — no Notion, no Linear, no accounts. The wizard skips the
+  Linear team, Notion home page, docs database, and template ID questions
+  entirely, and the MCP connectivity checks for Notion and Linear don't run.
+
+In local mode, everything the pipeline generates is written as markdown
+under `.sdlc/features/<NNN-slug>/` in your workspace instead of to Notion
+pages and Linear issues:
+
+```
+.sdlc/features/001-health-check-endpoint/
+├── prd.md
+├── scoping-doc.md
+├── jotdown.md
+└── tasks/
+    ├── README.md
+    └── 001-add-endpoint.md
+```
+
+**Commit these files.** They are the specification, not a cache of one —
+there's no Notion page or Linear issue elsewhere holding the source of
+truth.
+
+Every skill runs the same way in either mode: the same clarifying questions,
+the same validation gates. Only where the output lives changes.
+
+You can switch modes later by re-running `/sdlc-workspace-init` — it re-runs
+Phase 0 and updates `sdlc.mode` in `.claude/settings.local.json`. Switching
+does **not** migrate anything: files already written to `.sdlc/` stay on
+disk, and pages already written to Notion or Linear stay there. Pick the
+mode you want at the start of a feature, not partway through it.
+
 ## Skills Reference
 
 ### `/sdlc-workspace-init`
@@ -220,7 +276,8 @@ Human Review ──────────────────────�
 Interactive setup wizard that configures `.claude/settings.local.json` and
 verifies MCP integration connectivity. **Run this first** when setting up a
 new project directory. Idempotent — only asks for missing values, always
-reports status.
+reports status. Also where you choose the artifact backend — Notion +
+Linear or local files — see [Local Mode](#local-mode-no-notion-no-linear).
 
 **Input:** None (interactive wizard)
 **Output:** Updated `.claude/settings.local.json`, MCP connectivity report, next steps
@@ -391,6 +448,9 @@ Notion, Linear, and Figma are Claude built-in integrations -- enable them in
 your Claude Code settings and authenticate via OAuth when prompted. Playwright
 is bundled as a local MCP server inside the plugin and runs via `npx`. It
 auto-downloads browser binaries on first use (~150 MB, no auth needed).
+
+Notion and Linear apply to remote mode only -- local mode needs neither. See
+[Local Mode](#local-mode-no-notion-no-linear).
 
 ## Keeping Repos in Sync
 
