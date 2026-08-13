@@ -91,14 +91,14 @@ claude
 ```
 
 ```
-/plugin marketplace add dbianco/ai-sdlc
+/plugin marketplace add TextraAI/ai-sdlc
 ```
 
 **Exit and restart Claude Code** (`/exit`, then `claude`) so the marketplace
 is fully loaded. Then install the plugin:
 
 ```
-/plugin install sdlc@dbianco-sdlc
+/plugin install sdlc@TextraAI-sdlc
 ```
 
 **Exit and restart Claude Code again.** The plugin's skills, agents, hooks,
@@ -416,6 +416,15 @@ pull the latest version:
 No file copying or backup steps required.
 
 ## Troubleshooting
+
+**Marketplace not found error**
+If you see `Marketplace "TextraAI-sdlc" not found`, try using the full GitHub URL instead:
+
+```
+/plugin marketplace add https://github.com/TextraAI/ai-sdlc
+```
+
+Then exit and restart Claude Code before installing the plugin.
 
 **Marketplace or plugin not showing up after install**
 Sometimes Claude Code does not pick up newly added marketplaces or plugins

@@ -1,0 +1,92 @@
+# ai-sdlc
+
+A Codex plugin (`sdlc`) providing an AI-powered SDLC pipeline — from PRD generation through implementation. Distributed via the Codex plugin marketplace (`TextraAI-sdlc`). No build system, test runner, or CI for the repo itself.
+
+## Tech Stack
+
+Markdown + YAML frontmatter (skills/agents), Bash (scripts/hooks), JSON (manifests/config) for the plugin. TypeScript + Node 22 for services under `services/`.
+
+## Commands
+
+```bash
+# Local dev: test from a workspace directory (NOT this repo)
+/plugin marketplace add /path/to/ai-sdlc
+/plugin install sdlc@TextraAI-sdlc
+/plugin uninstall sdlc   # pick up changes after editing skill/agent files
+
+# Releasing (GitHub Actions only — never bump versions manually)
+# Actions → Release Plugin → Run workflow → select plugin + bump type
+```
+
+## Key Directories
+
+| Path | Purpose |
+|------|---------|
+| `plugins/sdlc/skills/*/SKILL.md` | 10 slash commands (each a markdown + YAML file) |
+| `plugins/sdlc/agents/*.md` | 6 sub-agents spawned by skills |
+| `plugins/sdlc/scripts/` | Bash scripts (`workspace-sync.sh`) |
+| `plugins/sdlc/hooks/hooks.json` | Lifecycle event hooks (currently empty) |
+| `plugins/sdlc/.mcp.json` | Playwright MCP server (only MCP bundled here; Snyk is global via `~/.Codex.json`) |
+| `plugins/sdlc/.Codex-plugin/plugin.json` | Plugin metadata (name, version, author) |
+| `.Codex-plugin/marketplace.json` | Marketplace definition (`TextraAI-sdlc`) |
+| `.github/scripts/bump-plugin-version.sh` | Bumps plugin version in plugin.json + marketplace.json |
+| `.github/workflows/release-plugin.yml` | Plugin release: manual bump + on merge: tag, GitHub Release |
+
+## Conventions
+
+**Skill naming:** folder name must exactly match the `name` frontmatter field; all use the `sdlc-` prefix (e.g. `sdlc-generate-prd`). Users invoke as `/sdlc:<skill-name>`.
+
+**Writing skills:** `name` + `description` required in frontmatter; use `$ARGUMENTS` for user input; reference scripts via `${CLAUDE_PLUGIN_ROOT}/scripts/` (never hardcode paths); set `disable-model-invocation: true` only for pure bash commands.
+
+**Writing agents:** `name` + `description` required; `model: opus/sonnet/haiku` recommended; spawned by skills via the Agent tool.
+
+**Scripts:** must be bash and executable (`chmod +x`).
+
+**Workspace config:** lives in `.Codex/settings.local.json` under the `sdlc` key; created by `/sdlc-workspace-init`; never modify `sdlc.templates` or `safety_boundaries.restricted_paths` programmatically.
+
+## Plugin Development
+
+When making changes to plugin source files, remember that installed plugin caches may contain stale copies. After editing source, sync/reinstall the plugin so changes take effect.
+
+Typical workflow after editing a skill, agent, script, or manifest under `plugins/sdlc/`:
+
+```bash
+# Option A — uninstall/reinstall to force cache refresh
+/plugin uninstall sdlc
+/plugin install sdlc@TextraAI-sdlc
+
+# Option B — copy edited files directly into the active cache (faster iteration)
+cp plugins/sdlc/scripts/<file> ~/.Codex/plugins/cache/TextraAI-sdlc/sdlc/<version>/scripts/<file>
+```
+
+The cache path pattern is `~/.Codex/plugins/cache/TextraAI-sdlc/sdlc/<version>/`. Check `~/.Codex/plugins/installed_plugins.json` for the currently installed version. Verify the change took effect by running the modified skill/script and confirming the new behavior — edits to source alone will not propagate to running sessions.
+
+## Feature Flags
+
+No feature flag usage detected in this repo. The `sdlc-generate-jotdown` skill documents how to specify Split.io feature flag details for target repos (split name, treatments, key, evaluation point, fallback behavior) in Section 8 of the Jot Down spec.
+
+## After Making Changes
+
+After any modification to the AI-SDLC project, check for inconsistencies or gaps introduced by the change:
+
+- **Skill-level change** (editing a `SKILL.md`): review the affected skill — does the description still match the prompt body? Are referenced agents, scripts, or config keys still valid? Do validation gates and output formats align with downstream consumers?
+- **Agent-level change** (editing an agent `.md`): review all skills that spawn this agent — do their prompts, expected inputs/outputs, and model assumptions still hold?
+- **Cross-cutting change** (scripts, hooks, config, conventions): scan the whole project — skills, agents, scripts, hooks, and manifests — for anything that depends on the changed behavior.
+
+If inconsistencies or gaps are found, report them to the user and ask how they'd like to proceed before making additional fixes.
+
+## Important Notes
+
+- Notion, Linear, and Figma are Codex built-in OAuth integrations — NOT in `.mcp.json`.
+- One custom MCP is bundled in `plugins/sdlc/.mcp.json`: Playwright (~150 MB browser download on first use). Snyk is configured globally in `~/.Codex.json` (not in `.mcp.json`) by `/sdlc-workspace-init` using the direct binary path.
+- `security-agent` uses Snyk MCP tools (`snyk_trust`, `snyk_code_scan`, `snyk_sca_scan`, `snyk_iac_scan`). Snyk setup (install, auth, MCP entry, permissions) is handled entirely by `/sdlc-workspace-init` — the agent SKIPs and directs the user there if Snyk is unavailable. SCA folder trust is established at first scan time via `snyk_trust` (opens browser for approval). It is spawned by `sdlc-implement-task` after the Test Agent PASS, but only if the user opts in — the skill asks on every run whether to scan.
+- Releasing: `release-plugin.yml` (manual trigger creates PR; on merge tags + publishes, tags follow `sdlc-v<semver>`).
+- Four skills spawn `skill-retrospective` agent at the end: `generate-scoping-doc`, `generate-jotdown`, `generate-data-ui-inventory`, `implement-task`.
+- Validation gates in `generate-jotdown` and `generate-task-breakdown` block on `TBD`, `NEEDS HUMAN INPUT`, or unresolved `OQ-x` in source docs.
+- `sdlc-implement-task` orchestrates sub-agents only; it does NOT write code itself. Branch format: `ai/<issue-id>-<slugified-title>`. Pipeline order: Coding Agent → Test Agent → Security Agent (optional — user is asked each run) → Documentator Agent → Commit. The commit always carries a `Security:` trailer, including `SKIPPED — scan declined by user`.
+
+## Lessons Learned
+
+### sdlc-implement-task
+- Use Yarn (not npm) for all TypeScript services in this repo — save package manager preference to memory early to prevent rework across agent iterations (2026-03-26)
+- When scaffolding services requiring Node 22+ (e.g. for node:sqlite), include the Node version requirement explicitly in task context so the Coding Agent doesn't discover runtime constraints mid-run (2026-03-26)
