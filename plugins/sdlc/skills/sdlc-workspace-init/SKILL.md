@@ -26,7 +26,49 @@ $ARGUMENTS — Optional mode flag:
 
 ## Procedure
 
-### Phase 0 — Choose the Artifact Store
+### Phase 0 — Locate the Workspace and Choose the Artifact Store
+
+0.0. **Check for an ancestor workspace before creating anything.** Walk up
+     from the project root one directory at a time and test whether
+     `<ancestor>/.claude/settings.local.json` exists and contains an `sdlc`
+     key. **Stop before `$HOME`** — `~/.claude/settings.local.json` is
+     user-scope Claude Code config, not a workspace, and must never be
+     treated as an ancestor workspace.
+
+     **If no ancestor workspace is found**, continue to 0.1 normally. This is
+     the common case.
+
+     **If an ancestor workspace is found**, stop and ask before writing
+     anything. Creating a `.claude/settings.local.json` here would shadow the
+     ancestor's config for every session started in this directory — its
+     repository list, PR size limits, mode, and Snyk tool permissions would
+     all silently stop applying, with no warning at the point of use. A repo
+     nested inside a workspace is exactly where people naturally start a
+     session, so this is easy to hit by accident.
+
+     Ask with `AskUserQuestion`, naming the ancestor path and its workspace
+     name: "`<ancestor path>` is already an SDLC workspace
+     (`<workspace name>`), and this directory sits inside it."
+
+     - **Register this repo in `<workspace name>`** (the default, and almost
+       always correct) — add an entry to the ancestor's `sdlc.repositories`
+       (`name` = this directory's name, `path` = this directory relative to
+       the ancestor root), leave every other ancestor setting untouched, and
+       create nothing here. This is a purely additive one-line change: apply
+       it per the write rules in Phase 2.3, report what was added, and stop.
+       The remaining phases do not run — they describe the ancestor
+       workspace, which is already configured.
+     - **Make this a separate workspace** — run the full wizard from Phase
+       0.1. Say plainly: "Sessions started in this directory will use this
+       config instead of `<workspace name>`'s, and the two will not stay in
+       sync."
+
+     If this directory is already listed in the ancestor's
+     `sdlc.repositories`, say so and report that instead of adding a
+     duplicate entry.
+
+     Never create a nested workspace silently, and never pick either option
+     for the user.
 
 0.1. **Decide whether this phase runs at all.** Read
      `.claude/settings.local.json` first and classify the workspace into
@@ -73,7 +115,7 @@ $ARGUMENTS — Optional mode flag:
        Linear issues. Requires a Notion workspace and a Linear team.
      - **Local files** — everything is markdown under `.sdlc/` in this
        workspace. No external accounts, no setup. You can switch later by
-       running `/sdlc-workspace-init --switch-mode`.
+       running `/sdlc:sdlc-workspace-init --switch-mode`.
 
      Write the answer to `sdlc.mode` as `"remote"` or `"local"` respectively,
      and **persist it to `.claude/settings.local.json` immediately** — before
@@ -288,7 +330,28 @@ $ARGUMENTS — Optional mode flag:
    - `sdlc.safety_boundaries.max_files_per_pr` and `max_lines_per_pr` may be set
      if missing (seeded with defaults or user-provided values)
    - Only update the specific fields that had placeholder values
-   - Write the file back with 2-space indented JSON
+   - Write the file back as UTF-8 with 2-space indented JSON, **without ASCII
+     escaping** — every non-ASCII character already in the file must survive
+     the round-trip unchanged
+
+   **Encoding — this is not optional.** Python's `json.dump` defaults to
+   `ensure_ascii=True`, which rewrites characters like `✓` into `✓`.
+   The JSON is semantically identical, but the bytes are not: it produces a
+   spurious diff inside `permissions.allow` and other keys this skill is
+   forbidden to modify, and it churns the file again on every repeat run.
+   Always pass `ensure_ascii=False` and open both the read and the write with
+   `encoding="utf-8"`:
+   ```python
+   import json
+   with open(path, encoding="utf-8") as f:
+       cfg = json.load(f)
+   # ... modify only the permitted keys ...
+   with open(path, "w", encoding="utf-8") as f:
+       json.dump(cfg, f, indent=2, ensure_ascii=False)
+       f.write("\n")
+   ```
+   Whatever tool performs the write, verify afterwards that the only changed
+   lines are the ones you intended.
 
 ### Phase 3 — Create SDLC Documents Database (If Needed)
 
@@ -401,8 +464,8 @@ Snyk and Playwright are unaffected — they are local tools and Phase 6 still ru
      "Your team '<name>' was not found. Available teams: [list]."
    - **If it fails:** Record status as "Not connected". Do NOT retry or
      block. Note: "Linear will prompt for sign-in the first time you use a
-     skill that needs it (`/sdlc-generate-task-breakdown`,
-     `/sdlc-implement-task`)."
+     skill that needs it (`/sdlc:sdlc-generate-task-breakdown`,
+     `/sdlc:sdlc-implement-task`)."
 
 5.3. **Check Notion.** Attempt to fetch the configured
    `notion.home_directory` page using the Notion MCP.
@@ -415,9 +478,9 @@ Snyk and Playwright are unaffected — they are local tools and Phase 6 still ru
      skills require Notion, so you will want to set this up soon."
 
 5.4. **Check Figma.** Figma is optional — it is only needed for
-    `/sdlc-generate-data-ui-inventory`.
+    `/sdlc:sdlc-generate-data-ui-inventory`.
     - Ask: "Figma is optional (only needed for
-      `/sdlc-generate-data-ui-inventory`). Would you like to test Figma
+      `/sdlc:sdlc-generate-data-ui-inventory`). Would you like to test Figma
       connectivity now, or skip it?"
     - **If the user wants to test:** Ask for a Figma file URL and attempt to
       fetch metadata. Report success or failure.
@@ -431,7 +494,7 @@ Snyk and Playwright are unaffected — they are local tools and Phase 6 still ru
 
 ### Phase 6 — Set up Snyk MCP globally (Always Runs)
 
-6.1. **Set up Snyk MCP globally.** Snyk is required for `/sdlc-implement-task`
+6.1. **Set up Snyk MCP globally.** Snyk is required for `/sdlc:sdlc-implement-task`
     security scanning. It must be registered in `~/.claude.json` so it is
     available in all sessions and sub-agents.
 
@@ -458,7 +521,7 @@ Snyk and Playwright are unaffected — they are local tools and Phase 6 still ru
       - If auth fails (invalid or expired token): warn the user:
         > "⚠️ The `SNYK_TOKEN` in your environment appears to be invalid or
         > expired. Please update the token value or remove the variable and
-        > re-run `/sdlc-workspace-init` to sign in via browser instead."
+        > re-run `/sdlc:sdlc-workspace-init` to sign in via browser instead."
         Record Snyk status as "Blocked — invalid SNYK_TOKEN". Skip to Step E.
 
     **Step B — Detect Snyk CLI installation.**
@@ -552,8 +615,12 @@ Snyk and Playwright are unaffected — they are local tools and Phase 6 still ru
     }
     ```
 
-    Preserve all other keys in `~/.claude.json`. Write back with 2-space
-    indentation.
+    Preserve all other keys in `~/.claude.json`. Write back as UTF-8 with
+    2-space indentation and **without ASCII escaping** — the same encoding
+    rule as Phase 2.3 (`ensure_ascii=False`, `encoding="utf-8"` on both read
+    and write). `~/.claude.json` routinely contains non-ASCII text in
+    unrelated keys; escaping it rewrites parts of the user's global config
+    this step has no business touching.
 
     **D2 — Workspace tool permissions.** Read `.claude/settings.local.json`.
     Ensure the following tools are present in `permissions.allow` (add only
@@ -568,7 +635,10 @@ Snyk and Playwright are unaffected — they are local tools and Phase 6 still ru
     If `permissions` does not exist in the file, add it. If `permissions.allow`
     does not exist, create it as an empty array first. Preserve all other
     `permissions` keys (`deny`, etc.) and all other top-level keys unchanged.
-    Write back with 2-space indentation.
+    Write back as UTF-8 with 2-space indentation and **without ASCII
+    escaping**, per the encoding rule in Phase 2.3. Existing `permissions.allow`
+    entries frequently contain non-ASCII characters inside quoted shell
+    commands; appending the Snyk entries must not rewrite any of them.
 
     **D3 — Note on SCA folder trust.**
 
@@ -595,7 +665,7 @@ Snyk and Playwright are unaffected — they are local tools and Phase 6 still ru
       and display this notice prominently at the end of Phase 8:
       > "**Action required:** Snyk was just configured globally. Please
       > restart Claude Code for it to take effect. Security scanning in
-      > `/sdlc-implement-task` will be active after the restart."
+      > `/sdlc:sdlc-implement-task` will be active after the restart."
     - If Snyk is **Blocked** or **Skipped**: record that status and include
       it in the next-steps list at the end of Phase 8.
 
@@ -686,7 +756,7 @@ Snyk and Playwright are unaffected — they are local tools and Phase 6 still ru
 
       These files are the specification — commit them.
 
-      To switch to Notion and Linear, run `/sdlc-workspace-init --switch-mode`.
+      To switch to Notion and Linear, run `/sdlc:sdlc-workspace-init --switch-mode`.
       Existing files stay on disk; they are not migrated.
       ````
 
@@ -713,7 +783,7 @@ Snyk and Playwright are unaffected — they are local tools and Phase 6 still ru
     ```
 
     Directly under this block, always print: "To switch artifact stores
-    later, run `/sdlc-workspace-init --switch-mode`." This is the only place
+    later, run `/sdlc:sdlc-workspace-init --switch-mode`." This is the only place
     the flag needs to be advertised — it makes the switch path discoverable
     on every run without re-asking on ordinary ones.
 
@@ -754,35 +824,48 @@ Snyk and Playwright are unaffected — they are local tools and Phase 6 still ru
     ```
 
     If a repository has `CLAUDE.md` at the root but NOT in `.claude/`,
-    show a warning: "Legacy location — run
-    `/sdlc-init-claude-context <repo>` to move it to `.claude/CLAUDE.md`."
+    show a warning: "Legacy location — type
+    `/sdlc:sdlc-init-claude-context <repo>` yourself to move it to
+    `.claude/CLAUDE.md`."
 
-8.4. **Display actionable next steps** based on what is still pending:
+8.4. **Display actionable next steps** based on what is still pending.
+
+    `sdlc-init-claude-context` sets `disable-model-invocation: true`, so the
+    assistant cannot run it on the user's behalf even if asked — the user must
+    type it. Word every step that references it as a user action ("type"),
+    never as something about to happen, and always include the `/sdlc:`
+    prefix, since the bare `/sdlc-init-claude-context` does not resolve.
 
     - If any MCP is not connected: "Authenticate <service> by running any
-      skill that uses it, or run `/sdlc-workspace-init` again after signing
+      skill that uses it, or run `/sdlc:sdlc-workspace-init` again after signing
       in."
     - If any repository directory is missing: "Clone the missing
       repositories into your project directory."
-    - If any repository is missing `.claude/CLAUDE.md`: "Run
-      `/sdlc-init-claude-context <repo>` to generate codebase context, or
-      `/sdlc-init-claude-context --all` to generate for all repos in
-      parallel."
-    - If any repository has a legacy root-level `CLAUDE.md`: "Run
-      `/sdlc-init-claude-context <repo>` to migrate it to
+    - If any repository is missing `.claude/CLAUDE.md`: "Type
+      `/sdlc:sdlc-init-claude-context <repo>` to generate codebase context, or
+      `/sdlc:sdlc-init-claude-context --all` to generate for all repos in
+      parallel. This one has to come from you — I cannot run it for you."
+    - If any repository has a legacy root-level `CLAUDE.md`: "Type
+      `/sdlc:sdlc-init-claude-context <repo>` yourself to migrate it to
       `.claude/CLAUDE.md`."
     - If any recommended plugin is "Not installed": "Install recommended
       plugins to improve code quality — Claude Code will have access to
       real-time type checking, go-to-definition, and up-to-date library
       docs. Run the `/plugin install` commands listed above."
     - If everything is green: "You are all set! Try
-      `/sdlc-generate-prd <your feature idea>` to create your first PRD."
+      `/sdlc:sdlc-generate-prd <your feature idea>` to create your first PRD."
 
 ## Important
 
 - This skill modifies the `sdlc` key and the `model` key inside
   `.claude/settings.local.json`. It must NEVER modify any other top-level
-  keys in that file (e.g. `permissions`, `env`, etc.).
+  keys in that file (e.g. `permissions`, `env`, etc.) — the one exception is
+  `permissions.allow`, which Step D2 appends the Snyk tool entries to.
+- The only file outside the project root this skill may touch is
+  `~/.claude.json` (Step D1), plus — when the user picks "Register this repo"
+  in Phase 0.0 — a single additive entry in the ancestor workspace's
+  `sdlc.repositories`. Never write anything else to an ancestor, and never
+  reconfigure an ancestor workspace from a nested directory.
 - Phase 0's answer is persisted to `.claude/settings.local.json` the moment
   it is given, and no later phase may write a different `sdlc.mode`.
   Phase 1.1's `"mode": "remote"` default applies only when no mode exists
@@ -811,6 +894,20 @@ Snyk and Playwright are unaffected — they are local tools and Phase 6 still ru
   parse it, modify only `sdlc.*` keys and `permissions.allow` (for Snyk tools
   in Step D2), and write back with 2-space indentation.
   Never use string manipulation — always use proper JSON read-modify-write.
+- **Every JSON write in this skill must be UTF-8 and non-ASCII-escaping** —
+  `.claude/settings.local.json` and `~/.claude.json` alike. Python's default
+  `json.dump(..., ensure_ascii=True)` turns `✓` into `✓`, silently
+  rewriting keys this skill must never modify and producing unexplained diffs
+  in a git-tracked settings file. Use `ensure_ascii=False` and
+  `encoding="utf-8"` on both read and write, then confirm the diff touches
+  only the intended lines. "Proper JSON read-modify-write" is not sufficient
+  on its own — the encoding is part of the requirement.
+- Commands printed for the user to type must carry the plugin prefix:
+  `/sdlc:<skill-name>`, not `/sdlc-<skill-name>`. The unprefixed form does
+  not resolve. Note also that every skill except `sdlc-workspace-init` and
+  `sdlc-workspace-sync` sets `disable-model-invocation: true`, so the
+  assistant cannot run them on the user's behalf — word those next steps as
+  something the user types.
 - Keep language clear and non-technical. This is the first skill most users
   will encounter. Say "your browser will open for sign-in" rather than
   "the OAuth flow will initiate."
