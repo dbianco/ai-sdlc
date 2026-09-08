@@ -248,6 +248,41 @@ been generated first. If omitted, the skill will ask.
 
     List every contradiction found (claim vs. what the tree shows). Carry
     this list into step 11a.
+10a. **Dispatch a research pass over the affected repositories.** Spawn a
+    read-only research sub-agent (via the Agent tool) per affected repository
+    to verify the source documents' concrete claims against the actual
+    codebase — even when the Scoping Doc and PRD have already been reviewed
+    and approved. Approval establishes intent, not correctness: a document
+    can be internally consistent while resting on a false premise stated one
+    line deep in an unrelated file (e.g. an API client that discards the
+    credential the whole feature depends on, a source-scan rule that forbids
+    the exact module name the plan introduces, a route table that already
+    claims the prefix the plan appends to).
+
+    For each concrete claim the source documents make about the codebase — a
+    field that exists, a permission or auth model, a route table, a union's
+    members, a contract or schema shape — instruct the sub-agent to report
+    whether the tree confirms it. In particular, verify that every field the
+    source documents promise to display, filter on, or otherwise expose
+    exists in the repo's pinned contract/schema definitions, and flag any UI
+    affordance (a nav pattern, an icon vocabulary, a badge) that breaks a
+    precedent already established by prior screens in the same repo.
+
+    Treat the sub-agent's own citations as claims to re-verify, not facts to
+    transcribe directly — particularly any count of "N files reference X": a
+    string literal or property name shared by two unrelated types is
+    commonly reported as one set, and an instruction to change "the ten
+    places" built on an unverified count can break the ones that share only
+    the string. Spot-check any citation that will drive a Jot Down
+    instruction before writing it in.
+
+    Route each finding to the step that fits: a document claim directly
+    contradicted by the code goes to step 11a. A schema gap or precedent
+    break the source documents never anticipated, where more than one fix is
+    reasonable, goes to step 11 as a decision for the user. A schema gap
+    where there is only one reasonable fix is a source correction (step 11a)
+    even though nothing in the source document was stated as fact and then
+    disproved.
 
 11. **Surface architectural decisions.** Before generating, identify any
     design choices where multiple valid approaches exist that were not already
@@ -302,6 +337,34 @@ been generated first. If omitted, the skill will ask.
 
     Do not proceed to step 12 with a contradiction between the source and the
     codebase left unresolved by either a recorded correction or a decision.
+11a. **Record source corrections.** Where a source document's claim about
+    existing code is contradicted by the code, the code wins and the Jot
+    Down states the corrected fact — do not silently follow the source, and
+    do not silently correct it without a record.
+
+    - Add a row to the **1. Architectural Decisions** table (step 12) for
+      each correction: Decision = the claim being corrected, Options
+      Considered = what the source document said, Chosen Approach = the
+      corrected fact, Rationale = `Correction to <source doc> <section/ID>,
+      verified against <artefact>, <date>.` plus the one or two lines of
+      supporting evidence.
+    - If the correction changes the work — a migration turns out to be
+      needed, or turns out not to be, a planned contract edit is dropped —
+      say so explicitly in the relevant Phase 3 section (Database Model
+      Changes, API Specifications, etc.) too, since `generate-task-breakdown`
+      reads those sections, not the decisions table, to build the work
+      breakdown.
+    - If the correction is **behavioural and visible to a user or
+      operator** — the code settles what is *possible*, but not what is
+      *wanted* — treat it as a step 11 question instead of a silent
+      correction. (Example: the source says an operator retry clears a
+      status field; a DB trigger forbids the clear. "Keep it sticky" vs.
+      "add a migration to allow the clear" is a real choice for the user,
+      not a correction.)
+    - At the end of Phase 3, list every correction made across all
+      milestones so the user can decide whether to amend the upstream
+      Scoping Doc or PRD. This is separate from returning the artifact
+      reference in step 15.
 
 12. **Generate the Jot Down Implementation Spec.** If a template was fetched
     in step 3, follow its structure. Otherwise, use the default structure below.
@@ -332,6 +395,11 @@ been generated first. If omitted, the skill will ask.
     source corrections, set Options Considered to the source document's
     original claim and follow the Chosen Approach / Rationale shape from
     step 11a.
+    Include every decision surfaced in step 11, every source correction
+    recorded in step 11a, and any already resolved in the source material.
+    For pending decisions, set Chosen Approach to
+    `⚠️ PENDING DECISION` and Rationale to the context that will help the
+    team resolve it later.
 
     ### 2. Overall Solution
     Technical narrative: what are we building, how do the pieces fit together,
@@ -423,14 +491,14 @@ been generated first. If omitted, the skill will ask.
     appear in the dataLayer push. The trigger is the user action that
     fires the event.
 
-12a. **Gate the draft on measurable acceptance criteria.** Before writing the
-    Jot Down, re-read every acceptance criterion drafted in Section 10 (and
-    any embedded per-endpoint criteria in Section 4).
+12a. **Gate the draft on measurable, executable acceptance criteria.** Before
+    writing the Jot Down, re-read every acceptance criterion drafted in
+    Section 10 (and any embedded per-endpoint criteria in Section 4).
 
-    For each criterion, check whether it can be turned into a passing or
-    failing test as written. Flag any criterion that leans on an unquantified
-    quality adjective (the list in Section 10) or that describes an intent
-    rather than an observable outcome.
+    **First pass — measurability.** For each criterion, check whether it can
+    be turned into a passing or failing test as written. Flag any criterion
+    that leans on an unquantified quality adjective (the list in Section 10)
+    or that describes an intent rather than an observable outcome.
 
     For each flagged criterion:
     - If the source documents or the repo's CLAUDE.md supply the threshold
@@ -469,6 +537,26 @@ been generated first. If omitted, the skill will ask.
       needs <what's missing>` and do not count a pass in that harness as
       verifying the property. A criterion that cannot fail is worse than a
       missing one — a missing criterion is visible, a vacuous one is not.
+    **Second pass — executability.** For every criterion that survives the
+    measurability pass, identify the harness that will run it (unit,
+    integration, e2e) and confirm that harness can actually observe the
+    thing being asserted. Read the real test configuration — the e2e
+    runner's server-start command, the integration harness's bootstrapping —
+    rather than assuming the suite exercises the deployed artifact or
+    mechanism the criterion is about.
+
+    - Where a criterion needs a harness change (e.g. the e2e server command
+      must run the actual backend/worker instead of a static preview build)
+      to be observable at all, list that change as an explicit task in
+      Section 10 (Testing Strategy) and, if it affects rollout, Section 9
+      (Deployment Stages).
+    - Where a criterion would pass **vacuously** — the condition it asserts
+      cannot arise in that harness at all, so a green result would be true
+      for the wrong reason (e.g. asserting a cookie is absent in a stack
+      that never sets any cookie) — mark it vacuous. Either move it to a
+      harness that can falsify it, or drop it and say why in the document.
+      A criterion that cannot fail is worse than a missing one: a missing
+      criterion is visible, a vacuous one is not.
 
 13. **Write the Jot Down.** Call `write_doc(feature, jotdown, <content>)`,
     where `feature` is the one bound in step 4 — resolved from a feature ref,
