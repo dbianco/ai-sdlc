@@ -220,34 +220,6 @@ been generated first. If omitted, the skill will ask.
     implementation details: data models, API endpoints, service interactions,
     existing patterns.
 
-10a. **Verify source claims against the codebase — even when validation already
-    passed.** Passing step 5's marker scan, or the user having reviewed and
-    approved a Scoping Doc, establishes intent, not correctness: a document
-    can be internally consistent while resting on a false premise about code
-    that already exists, and that premise can sit one line deep in an
-    unrelated file. Before drafting, take every concrete claim the source
-    material makes about existing code and confirm it against what steps 9–10
-    actually found — not against the source document's prose description of
-    it. This includes at minimum:
-
-    - **Fields already present**: whether a field the source promises to add,
-      display, or filter on already exists in the pinned contract/schema, and
-      whether it is already served by the handler — "we need to add X" is the
-      cheapest claim to get wrong.
-    - **Schema constraints**: `NOT NULL`, `CHECK`, uniqueness, and which
-      columns a write-once/append-only trigger actually freezes — read the
-      trigger function body itself, not a migration's comment describing it.
-    - **Precedent and UI conventions**: affordances the source assumes are
-      available (icons, nav patterns, config flags) actually exist and match
-      prior usage in the repo.
-    - **Cited counts and precedents**: when the source says "like
-      `<named artefact>`" or gives a count of files referencing something
-      ("~10 files reference X"), open the named artefact and re-derive the
-      count directly — a string literal shared by two unrelated types will be
-      reported as one set.
-
-    List every contradiction found (claim vs. what the tree shows). Carry
-    this list into step 11a.
 10a. **Dispatch a research pass over the affected repositories.** Spawn a
     read-only research sub-agent (via the Agent tool) per affected repository
     to verify the source documents' concrete claims against the actual
@@ -313,30 +285,6 @@ been generated first. If omitted, the skill will ask.
     (up to 4 questions per `AskUserQuestion` call). Do NOT silently pick an
     approach — always ask.
 
-11a. **Record source corrections.** For each contradiction found in step 10a,
-    the code wins — but do not silently follow the source, and do not
-    silently correct it without a trace, since either failure mode reaches a
-    coding agent or a reviewer as an unexplained discrepancy.
-
-    - Record it as a row in Section 1 (Architectural Decisions), even though
-      it is not a decision: use the Decision column for what the source
-      claimed, Chosen Approach for the corrected fact, and Rationale for
-      `Correction to <source doc>, verified <date>. <artefact checked and
-      what it showed>.`
-    - If the correction **changes the work** — a migration that turns out to
-      be needed, or one that turns out not to be — reflect that in the
-      relevant Phase 3 section (Database Model Changes, API Specifications,
-      Deployment Stages, Testing Strategy) in addition to the Architectural
-      Decisions row, so the change doesn't reach only the row and not the
-      task breakdown that reads those sections.
-    - If the correction is **behavioural and visible to a user or
-      operator** — the code settles what's *possible*, but which possible
-      behavior is *wanted* is still open — treat it as a step 11 decision
-      instead of a silent correction: ask the user via `AskUserQuestion`
-      rather than recording it as settled.
-
-    Do not proceed to step 12 with a contradiction between the source and the
-    codebase left unresolved by either a recorded correction or a decision.
 11a. **Record source corrections.** Where a source document's claim about
     existing code is contradicted by the code, the code wins and the Jot
     Down states the corrected fact — do not silently follow the source, and
@@ -388,13 +336,6 @@ been generated first. If omitted, the skill will ask.
     ### 1. Architectural Decisions
     Table: Decision | Options Considered | Chosen Approach | Rationale
 
-    Include every decision surfaced in step 11, any already resolved in
-    the source material, and any source corrections recorded in step 11a.
-    For pending decisions, set Chosen Approach to `⚠️ PENDING DECISION` and
-    Rationale to the context that will help the team resolve it later. For
-    source corrections, set Options Considered to the source document's
-    original claim and follow the Chosen Approach / Rationale shape from
-    step 11a.
     Include every decision surfaced in step 11, every source correction
     recorded in step 11a, and any already resolved in the source material.
     For pending decisions, set Chosen Approach to
@@ -516,27 +457,6 @@ been generated first. If omitted, the skill will ask.
     Do NOT invent a threshold silently. An invented number is worse than a
     flagged gap, because it looks agreed.
 
-    **Second pass — gate on harness executability.** A criterion can be
-    perfectly measurable and still have no harness that can observe it. For
-    each criterion, identify the harness that will execute it (unit,
-    integration, e2e) and confirm that harness can actually observe the thing
-    asserted. Read the real test configuration — the e2e runner's server
-    command (e.g. `webServer.command` in `playwright.config.ts`), the
-    integration harness's bootstrapping — rather than assuming the suite
-    exercises the deployed artifact (a `vite preview` server, for example,
-    does not run a backing worker/proxy that a criterion may depend on).
-
-    - Where a criterion needs a harness change to become observable, list
-      that change as an explicit task in the Testing Strategy section so it
-      reaches the task breakdown.
-    - Where a criterion would pass **vacuously** — the condition it asserts
-      cannot arise in that harness at all, so a pass proves nothing (e.g.
-      asserting a cookie never appears in `document.cookie` on a stack that
-      never sets any cookie) — do not let it stand as written. Mark it
-      `⚠️ NEEDS HUMAN INPUT: <criterion> cannot be falsified by <harness> —
-      needs <what's missing>` and do not count a pass in that harness as
-      verifying the property. A criterion that cannot fail is worse than a
-      missing one — a missing criterion is visible, a vacuous one is not.
     **Second pass — executability.** For every criterion that survives the
     measurability pass, identify the harness that will run it (unit,
     integration, e2e) and confirm that harness can actually observe the
@@ -642,16 +562,6 @@ been generated first. If omitted, the skill will ask.
   should use that pattern).
 - If you cannot determine something from the codebase, mark it as
   `⚠️ NEEDS HUMAN INPUT: <what's needed>` — do not guess.
-- A reviewed and approved source document is not a verified one. When a
-  Scoping Doc or PRD makes a concrete claim about existing code, confirm it
-  against the code (step 10a) rather than trusting the document's prose or
-  its own citations — approval establishes intent, not correctness.
-- When the source material's claim about existing code conflicts with what
-  the codebase shows, the code wins. Record the correction (step 11a) — do
-  not silently follow either side.
-- An acceptance criterion that no harness can falsify is worse than a
-  missing one (step 12a's second pass) — it reports a property as verified
-  when it was never actually exercised.
 - The Jot Down must be self-sufficient: `generate-task-breakdown` must be able
   to create tasks from it alone — Linear issues in `remote` mode, task files in
   `local` mode — without fetching a PRD or Scoping Doc. All milestones,
