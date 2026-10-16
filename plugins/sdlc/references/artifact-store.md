@@ -111,6 +111,7 @@ labels: [ai-sdlc, typescript]
 | `parallelizable` | no | `true` is the `[P]` marker |
 | `estimate` | yes | PERT hours |
 | `labels` | no | |
+| `follow_up` | no | List of consumer repositories (from `.claude/settings.local.json`) that must take an action after this task's PR merges, with the expected action. Each entry is an object: `{ repository: <name>, action: <short description>, comparator?: <command the consumer runs to detect drift> }`. `/sdlc-implement-task` surfaces them in the final report so a reviewer knows which consumers will report DRIFT between now and the merge |
 | `blocked_reason` | no | Short free text recording why the task was blocked; present only when `status:` is `blocked`. `update_task_status` removes it as soon as the task leaves that state |
 | `unmet` | no | List of acceptance-criterion IDs or short labels the run could not satisfy; present only when `status:` is `partial`. `update_task_status` removes it as soon as the task leaves that state |
 

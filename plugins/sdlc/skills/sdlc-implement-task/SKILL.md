@@ -14,8 +14,20 @@ is a Linear issue; in `local` mode it is a task file under a feature's
 
 ## Input
 
-$ARGUMENTS — In `remote` mode, a Linear issue identifier (e.g. `YAL-123`). In
-`local` mode, a task id (e.g. `001-002`) or a path to a task file.
+$ARGUMENTS — In `remote` mode, one or more Linear issue identifiers
+(e.g. `YAL-123` or `YAL-123, YAL-124`). In `local` mode, one or more task
+ids (e.g. `001-002` or `001-002, 001-003`) or paths to task files. The user
+may also write sequencing hints like `001-002 and 001-003 on top of 001-001`;
+treat any trailing `on top of <ref>` as a declaration that the named task is
+already a dependency satisfied by that branch, and base the first new
+branch on it instead of `main` (step 7 covers the mechanics).
+
+When $ARGUMENTS carries more than one ref, parse the list (comma or " and "
+separated), confirm the order with the user once at step 3, and run steps
+2a through 15 **once per task**, in order. Each task gets its own branch
+and its own commit; a failure in task N stops the loop and surfaces every
+task's state. The retrospective in step 16 runs once at the end, covering
+every task.
 
 ## Procedure
 
@@ -28,7 +40,29 @@ $ARGUMENTS — In `remote` mode, a Linear issue identifier (e.g. `YAL-123`). In
 1. **Load `.claude/settings.local.json`** from the project root. Read the `sdlc` config key,
    including safety boundaries.
 
-2. **Read the task.** Let `ref` be $ARGUMENTS, exactly as the user passed it.
+1a. **Refresh the task store (local mode only).** `.sdlc/` is typically a
+   symlink into another repo (commonly `platform-docs`), and `read_task`
+   reads from whichever revision is currently checked out there. A task
+   that exists on `origin/main` or on an open PR of the task-store repo
+   will otherwise be reported as "not found".
+
+   - Resolve the task-store repo: `readlink .sdlc` (or `realpath`), walk
+     up to the enclosing git repository, record its path.
+   - If its working tree has uncommitted changes, say so and stop; do not
+     fetch over local work. The user commits or stashes first.
+   - Run `git fetch origin --prune` in the task-store repo. Do not check
+     out anything — step 7 operates on the target code repo, not here.
+   - After `read_task(ref)` runs in step 2: if the result is "not found",
+     before aborting, search `git branch -a --list '*<task-id>*'` and
+     `gh pr list --search '<task-id>'` in the task-store repo and tell
+     the user **where** the task lives (branch name, PR number, SHA).
+     Ask whether to check that revision out first and retry.
+
+   For `remote` mode, skip this step — Linear is always "current" and the
+   task-store concept does not apply.
+
+2. **Read the task.** Let `ref` be the current task id from $ARGUMENTS
+   (see the loop in the Input section).
    Call `read_task(ref)`, and let `feature` be the feature that `read_task`
    resolved `ref` within. Both are used throughout the rest of this
    procedure — `feature` by `list_tasks(feature)` below, `ref` by
@@ -79,6 +113,36 @@ $ARGUMENTS — In `remote` mode, a Linear issue identifier (e.g. `YAL-123`). In
    `design`, `aesthetic`, `visual` → `frontend-design.md`). Keyword matches are
    lower-confidence — only use them if no label signal exists.
 
+2a. **Detect already-worked-on tasks.** Check the task's own `status:` field.
+   If it is **not** `todo` or `in_progress`, the task has been through the
+   loop before. Treat it as a resumption, not a fresh start.
+
+   - In `local` mode search for an existing branch matching
+     `ai/<task-id>-*` with `git branch -a --list 'ai/<task-id>-*'` in the
+     target repository (resolved in step 4; this check actually runs after
+     step 5).
+   - Search for an open PR with `gh pr list --head 'ai/<task-id>-*' --state open`.
+   - Record what was found: existing branch(es), their heads, any open PR
+     number, and the task's current status (`in_review`, `blocked`, `done`,
+     `partial`).
+
+   Present via `AskUserQuestion`:
+
+   > "Task `<task-id>` is already at status `<status>` with branch
+   > `<branch>` (PR `#<n>`). What should I do?"
+   >
+   > - **Verify** — check out the existing branch, re-run tests, and
+   >   report. No new commit is made.
+   > - **Resume** — check out the existing branch and keep going. Useful
+   >   when the task was `in_progress` or `blocked`.
+   > - **Redo from scratch** — delete the existing branch (after
+   >   confirming no uncommitted work is on it) and treat the task as
+   >   `todo`. Rarely the right choice; the user must confirm explicitly.
+   > - **Cancel** — stop. The task's state is unchanged.
+
+   For `todo` or `in_progress` tasks with no existing branch, skip this
+   step silently.
+
 3. **Confirm with the user** before proceeding. Present a summary using
    `AskUserQuestion`:
    - **Task ID and title**
@@ -124,13 +188,40 @@ $ARGUMENTS — In `remote` mode, a Linear issue identifier (e.g. `YAL-123`). In
      Check that estimated changes are within these limits.
    - If boundaries would be violated, report to user and abort.
 
+6a. **Guard against a dirty tree in the target repo.** Run `git status
+   --porcelain` in the target repository. If the output is non-empty, the
+   tree has uncommitted changes — the next step would otherwise pull over
+   them (step 7's `git checkout main && git pull`) or sweep them into the
+   commit (step 13's `git add`).
+
+   List the paths and ask via `AskUserQuestion`:
+
+   > "The target repo has uncommitted changes. These are unrelated to
+   > `<task-id>` and must not land in its commit. How should I proceed?"
+   >
+   > - **Stash them** — `git stash push -u -m "sdlc: before <task-id>"`,
+   >   restore after step 13 (`git stash pop`). The stash list carries
+   >   the task id so the user can recover if something fails.
+   > - **Commit them separately first** — stop; the user commits the
+   >   unrelated work on a side branch, then re-runs this skill.
+   > - **Abort** — stop and leave the tree as-is.
+
+   If the output is empty, continue silently.
+
 7. **Pull latest from remote and create a working branch:**
    ```
    git fetch origin
-   git checkout main
-   git pull origin main
+   git checkout <base>
+   git pull origin <base>
    git checkout -b ai/<task-id>-<slugified-title>
    ```
+
+   `<base>` is `main` by default. When the Input section's "on top of
+   `<other-task>`" hint was given — or when the previous task in a
+   multi-ref run completed — set `<base>` to that task's branch
+   (`ai/<other-task>-*`) so the new branch stacks on top of it instead of
+   diverging from `main`. Say which base was used in the final report so
+   the reviewer knows the stacking order.
 
    `<task-id>` is the Linear issue id (`yal-123`) in `remote` mode, or the
    composite task id (`001-002`) in `local` mode — producing branches like
@@ -374,9 +465,26 @@ $ARGUMENTS — In `remote` mode, a Linear issue identifier (e.g. `YAL-123`). In
     - `SKIPPED — scan declined by user` (step 11, user chose "No, skip it")
     - `SKIPPED — Snyk not configured` (Security Agent returned SKIPPED)
 
-12. **Spawn the Documentator Agent** as a sub-agent via Task:
+12. **Spawn the Documentator Agent** as a sub-agent via Task.
+
     **Skip this step entirely when `kind` is `acceptance-run`** — the run
     log already written by the Acceptance Run Agent is the documentation.
+
+    **Doc-only task shortcut (`kind: code` only).** If every file the
+    Coding Agent reported modifying is a documentation file
+    (`CHANGELOG.md`, `README.md`, any path under `docs/`, `*.md` outside
+    `src/` or `tests/`), the documentation has effectively already been
+    written by the Coding Agent. Ask the user once via `AskUserQuestion`:
+
+    > "The Coding Agent only touched documentation files. Run the
+    > Documentator Agent anyway, or skip?"
+    >
+    > - **Skip** — proceed to step 13.
+    > - **Run anyway** — spawn the agent normally.
+
+    Default to Skip when there is no interactive user (e.g. the loop over
+    multiple task refs is running unattended). Record which choice was
+    made in the final report.
 
     Pass to the Documentator Agent:
     - The changes made (files modified, new endpoints, schema changes)
@@ -385,9 +493,14 @@ $ARGUMENTS — In `remote` mode, a Linear issue identifier (e.g. `YAL-123`). In
     Read the Documentator Agent instructions from
     `${CLAUDE_PLUGIN_ROOT}/agents/documentator-agent.md`.
 
-13. **Commit all changes:**
+13. **Commit all changes.** Commit **only the files the Coding Agent (or
+    Documentator Agent) reported modifying** — never `git add -A`. The
+    tree may still carry unrelated changes that step 6a did not catch
+    (new files generated by test runs, caches), and `-A` would sweep them
+    into the task's commit. Pass the explicit path list to `git add`.
+
     ```
-    git add -A
+    git add <path1> <path2> …     # the Coding Agent's reported files
     git commit -m "<type>(<scope>): <description>
 
     Implements <task-id>
@@ -426,6 +539,8 @@ $ARGUMENTS — In `remote` mode, a Linear issue identifier (e.g. `YAL-123`). In
 14. **Report to the user:**
     - Summary of changes made (for `kind: code`) or **acceptance run
       outcome** and run log path (for `kind: acceptance-run`)
+    - Branch base used in step 7 (`main` or `ai/<other-task>-*`), so a
+      reviewer can tell when a branch stacks on another
     - Test results (pass/fail counts, coverage) — omit for `acceptance-run`
     - Security scan results (status, findings remediated, FPs documented) —
       or a note that the scan was skipped at the user's request, or that
@@ -450,7 +565,14 @@ $ARGUMENTS — In `remote` mode, a Linear issue identifier (e.g. `YAL-123`). In
     - **Acceptance-run specifics** (only for `kind: acceptance-run`): the
       head policy chosen in step 7c, the isolation parameters used, and
       the `unmet:` list when the outcome was PARTIAL.
-    - Ready for human review: `git diff main..HEAD`
+    - **Follow-up repositories** (when the task carries a `follow_up:`
+      field): list each consumer repo and the expected post-merge action
+      (e.g. "re-vendor the contracts commit"). Also list the DRIFT state
+      each will report between now and the merge, so the reviewer is not
+      surprised by a `DRIFT` output from `vectors/sync.sh check` or a
+      similar comparator — a comparator pinned to `origin/main` reports
+      DRIFT until the task's PR merges.
+    - Ready for human review: `git diff <base>..HEAD`
 
 15. **Update the task status.** For `kind: code` tasks, call
     `update_task_status(ref, in_review)`.
@@ -468,6 +590,29 @@ $ARGUMENTS — In `remote` mode, a Linear issue identifier (e.g. `YAL-123`). In
     `unmet:` or `blocked_reason:` as the artifact-store contract defines,
     leaving the rest of the file byte-identical.
 
+    **Commit the status change in the task-store repo (local mode only).**
+    `update_task_status` writes into the task file, which lives in the
+    task-store repo (typically a sibling repo surfaced through the `.sdlc/`
+    symlink). The status edit must land as its own commit on the branch
+    the task-store repo is currently on, or it is easily lost when a
+    reviewer checks out another branch there. This applies to both
+    `kind: code` and `kind: acceptance-run` tasks.
+
+    - In the task-store repo, confirm the modified file is just the task
+      file (`git status --porcelain` should show one path).
+    - Commit it with a short message, naming the task id and the new
+      status:
+
+      ```
+      chore(tasks): mark <task-id> <in_review|partial|blocked>
+      ```
+
+    - Do not push — the task-store repo's push/PR flow is the user's.
+      Record the commit SHA in the final report so it is traceable.
+
+    For `remote` mode, Linear persists the status itself; nothing to
+    commit.
+
 ---
 
 ### Retrospective
@@ -480,18 +625,23 @@ $ARGUMENTS — In `remote` mode, a Linear issue identifier (e.g. `YAL-123`). In
     - **Skill name**: `sdlc-implement-task`
     - **What was built**: the task id (Linear issue id in `remote` mode,
       composite task id in `local` mode), title, and branch name
-    - **Run summary**: for `kind: code` tasks, number of Coding/Test Agent
-      iteration cycles needed, test results (pass/fail/coverage), whether
-      the user opted into the security scan and its status and finding
-      counts, files modified count, any safety boundary concerns, any
-      preflight discrepancies recorded in step 7b and how they were
-      resolved, any user corrections or pushback during the run. For
-      `kind: acceptance-run` tasks, the Acceptance Run Agent's outcome
-      (PASS/PARTIAL/FAIL/BLOCKED), the head policy chosen, the isolation
-      parameters, the `unmet:` list when PARTIAL, any preflight
-      discrepancies and their disposition, and any user corrections or
-      pushback during the run
+    - **Run summary**: pass the step-14 report **verbatim**, not a
+      paraphrase. Step 14 already covers both `kind: code` (iteration
+      counts, test and security results, files modified, preflight notes)
+      and `kind: acceptance-run` (outcome, head policy, isolation
+      parameters, `unmet:` list, preflight notes), so the verbatim report
+      carries the right facts for the kind of task that ran. The agent
+      must quote only facts present in that summary. Append a one-line
+      instruction: *"When proposing lessons, cite each one against a
+      quoted line of the Run summary. Do not infer causes, conditions, or
+      remediations that are not present in the summary; if a proposed
+      lesson has no backing line, drop it instead of hedging."*
     - **Workspace config**: the repository list from `.claude/settings.local.json`
+
+    When a multi-ref run is in progress, the retrospective runs **once**
+    at the end of the loop and receives every task's step-14 report
+    concatenated verbatim. The agent still proposes exactly two lessons
+    across the whole run, not two per task.
 
 ## Important
 
