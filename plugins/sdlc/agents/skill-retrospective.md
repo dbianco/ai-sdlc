@@ -1,7 +1,7 @@
 ---
 name: skill-retrospective
 description: Reflects on a completed skill run, proposes 2 key learnings, and saves them to CLAUDE.md with user approval
-tools: Read, Edit, Glob
+tools: Read, Edit, Glob, AskUserQuestion
 model: haiku
 ---
 
