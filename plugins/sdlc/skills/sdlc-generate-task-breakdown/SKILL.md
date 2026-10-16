@@ -187,6 +187,77 @@ Jot Down. In `local` mode, a feature reference — `001`, `order-export`, or
      Linear milestone in `remote` mode, the `milestone:` front-matter value in
      `local` mode.
 
+6a. **Verify every task's references are satisfiable.** Before sequencing,
+    walk each task from step 6 and run three cheap checks against the
+    target repository (`task.repository`). The checks together close two
+    classes of defect that have shipped before: acceptance criteria that
+    no implementation can satisfy, and `files:` lists that name paths
+    which do not exist.
+
+    For each task:
+
+    a. **Files existence.** For every path in `files:`, `test -e <path>`
+       inside the task's repository.
+       - Exists → OK.
+       - Does not exist → flag as **new file** (the task is expected to
+         create it) or as **missing** (if the task's description implies
+         the file already exists). The two are distinct; mark which one.
+       - Directory-only entry → OK; the step 6 rule already requires a
+         `why` note for those.
+
+    b. **Satisfiability of mutation / failing-test / guard criteria.**
+       For every acceptance criterion that names a mutation ("apply the
+       bound after `LIMIT` by reordering — the limit case must go red"),
+       a specific test that must fail ("the completeness test fails on
+       orphans"), or a guard test ("adding this field without widening
+       the union must trip a typecheck"), ask: *can a deliberately broken
+       implementation make the named test red?*
+
+       Read the named test's source. If the test's assertions cannot
+       distinguish the correct implementation from the broken one — the
+       mutant is equivalent, the test scans a disjoint set of files, or
+       the harness compares the two implementations against each other
+       and would stay green either way — the criterion is **vacuous**.
+
+       Vacuous criteria must not reach a Coding Agent: either rewrite the
+       criterion so the harness can falsify it, add the missing coverage
+       as a separate task (and the criterion depends on it), or drop the
+       criterion with an explicit note.
+
+    c. **Repo-wide claims need a citation.** For every acceptance
+       criterion that asserts something about the whole repository or an
+       entire test suite — "the completeness test fails on orphans", "no
+       source file references the removed key", "every public endpoint
+       enforces the auth header" — record the exact command that would
+       prove it (`rg -F '<key>' src/`, `npm test -- i18n-catalog`, etc.)
+       as part of the criterion. The Coding Agent and Test Agent run the
+       command instead of guessing what "the suite" covers.
+
+    Classify every discrepancy:
+
+    - **Blocking** — a Files path marked **missing**, a **vacuous**
+      criterion, or a repo-wide claim with no runnable citation. The
+      breakdown cannot be shipped as-is.
+    - **Advisory** — a new file whose intent is clear; a citation that
+      names a command but with a flag that may need confirmation.
+
+    If any blocking item exists, present every discrepancy via
+    `AskUserQuestion` with three options:
+
+    > - **Pause so I can fix the Jot Down** — stop here. The user amends
+    >   the Jot Down (and/or the PRD) and re-runs the skill.
+    > - **Rewrite in place** — the skill proposes a corrected criterion
+    >   or a corrected `files:` list, batched up to 4 per `AskUserQuestion`
+    >   round, and the user confirms each one. The breakdown continues
+    >   with the corrected tasks.
+    > - **Abort** — stop the run.
+
+    If only advisory items exist, list them in a short "Advisory notes"
+    block and continue silently.
+
+    Record every discrepancy and the chosen disposition. These feed step
+    11 (user report).
+
 7. **Sequence the tasks** using dependency order. Identify the critical path.
    Group tasks by their milestone.
 
@@ -274,6 +345,10 @@ Jot Down. In `local` mode, a feature reference — `001`, `order-export`, or
       unmapped.
     - **File collisions resolved** in the sequencing step, if any: which tasks
       shared a file and how you sequenced them.
+    - **Satisfiability notes** from step 6a, if any: Files paths that
+      were absent and classified new vs. missing, acceptance criteria
+      rewritten or dropped as vacuous, and repo-wide claims that gained
+      a runnable citation.
 
 ## Task Decomposition Rules
 
