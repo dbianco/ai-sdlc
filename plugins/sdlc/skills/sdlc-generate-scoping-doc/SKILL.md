@@ -41,8 +41,51 @@ PRD. In `local` mode, a feature reference — `001`, `order-export`, or
 3. **Read the PRD.** Call `resolve_feature($ARGUMENTS)`, then
    `read_doc(feature, prd)`. Read it completely.
 
-   If the PRD is absent, say so and stop — a Scoping Doc cannot be written
-   without it. Do not offer to invent one.
+   **If the PRD is absent**, check whether a non-canonical planning document
+   exists in the feature's artifact store:
+   - In `local` mode: any other `.md` file inside the feature directory
+     (e.g. `plan-*.md`, `design-*.md`, `rfc-*.md`, or a file whose path was
+     passed in `$ARGUMENTS`).
+   - In `remote` mode: another page under the same home directory with a
+     title that looks like a plan or design (`Plan:`, `Design:`, `RFC:`
+     prefixes), or a page the user explicitly passed as `$ARGUMENTS`.
+
+   **If no such document exists**, say so and stop — a Scoping Doc cannot
+   be written without any input design. Do not offer to invent one.
+
+   **If a plan/design document exists**, ask the user via `AskUserQuestion`:
+
+   > "No `prd.md` was found, but `<path>` looks like a planning document.
+   > The skill needs a PRD to work from. How should I proceed?"
+   >
+   > - **Restructure into `prd.md`** — Read `<path>` and write a canonical
+   >   `prd.md` from it. Requirements are derived only from items the plan
+   >   already specifies; no KPIs are invented. Then continue in the same
+   >   run.
+   > - **Stop** — Stop here so you can author the PRD manually.
+
+   **If the user chooses "Restructure":**
+   - Read the plan/design document completely.
+   - Draft a `prd.md` using the standard PRD section structure.
+   - Derive REQ-xx IDs only from design items the plan already specifies.
+     Do **not** invent requirements that are not grounded in the source.
+   - For any PRD section without a corresponding statement in the source,
+     mark it `⚠️ NEEDS HUMAN INPUT` and record what is missing.
+   - For the Business Case / KPI section, write exactly:
+     `No KPI defined in the source plan — gather in a follow-up.`
+     Do not fabricate metrics.
+   - Gather every open item in the source plan (unresolved `OQ-x`, `TBD`,
+     `[placeholder]`, bulleted "to decide" lists) and surface them in a
+     single batched `AskUserQuestion` call (up to 4 questions per batch;
+     repeat until exhausted). Fold answers into the draft inline.
+   - Write the draft via `write_doc(feature, prd, <content>)`.
+   - Record in the run summary that the PRD was reconstructed from
+     `<path>` so `skill-retrospective` can carry it into CLAUDE.md.
+   - Continue with step 4 (validation) using the newly written PRD. The
+     validation step will catch any `⚠️ NEEDS HUMAN INPUT` markers that
+     remain blocking.
+
+   **If the user chooses "Stop":** stop. Do not continue.
 
 4. **Validate the PRD is complete.** Scan the entire document for any sections
    that require human intervention. Check for ALL of the following markers:
