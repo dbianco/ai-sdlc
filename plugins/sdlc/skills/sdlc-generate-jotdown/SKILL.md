@@ -290,18 +290,32 @@ been generated first. If omitted, the skill will ask.
     Down states the corrected fact — do not silently follow the source, and
     do not silently correct it without a record.
 
+    Capture each correction as a structured record with a stable ID:
+
+    ```
+    C-<n>:
+      source: <prd | scoping-doc | other>
+      location: <section/ID or heading in the source document>
+      original_claim: "<the exact wording the source stated>"
+      corrected_fact: "<what the tree actually shows>"
+      evidence: "<file:line, grep output, or 1–2-line excerpt that proves it>"
+      date: <YYYY-MM-DD>
+      changes_work: <true | false>   # does the correction add/drop/rewrite a task?
+    ```
+
+    IDs run `C-1`, `C-2`, … across all milestones in the current run.
+
     - Add a row to the **1. Architectural Decisions** table (step 12) for
       each correction: Decision = the claim being corrected, Options
       Considered = what the source document said, Chosen Approach = the
-      corrected fact, Rationale = `Correction to <source doc> <section/ID>,
-      verified against <artefact>, <date>.` plus the one or two lines of
-      supporting evidence.
-    - If the correction changes the work — a migration turns out to be
-      needed, or turns out not to be, a planned contract edit is dropped —
-      say so explicitly in the relevant Phase 3 section (Database Model
-      Changes, API Specifications, etc.) too, since `generate-task-breakdown`
-      reads those sections, not the decisions table, to build the work
-      breakdown.
+      corrected fact, Rationale = `Correction C-<n> to <source doc>
+      <section/ID>, verified against <artefact>, <date>.` plus the one or
+      two lines of supporting evidence.
+    - If `changes_work` is true (a migration turns out to be needed, or
+      turns out not to be, a planned contract edit is dropped) — say so
+      explicitly in the relevant Phase 3 section (Database Model Changes,
+      API Specifications, etc.) too, since `generate-task-breakdown` reads
+      those sections, not the decisions table, to build the work breakdown.
     - If the correction is **behavioural and visible to a user or
       operator** — the code settles what is *possible*, but not what is
       *wanted* — treat it as a step 11 question instead of a silent
@@ -309,10 +323,11 @@ been generated first. If omitted, the skill will ask.
       status field; a DB trigger forbids the clear. "Keep it sticky" vs.
       "add a migration to allow the clear" is a real choice for the user,
       not a correction.)
-    - At the end of Phase 3, list every correction made across all
-      milestones so the user can decide whether to amend the upstream
-      Scoping Doc or PRD. This is separate from returning the artifact
-      reference in step 15.
+    - Also mirror every correction in the Jot Down's **Section 0
+      Corrections** block (step 12) so a reader does not re-litigate the
+      original claim.
+    - Step 14a (after the Jot Down is written) offers to propagate the
+      corrections back to the source documents as dated notes.
 
 12. **Generate the Jot Down Implementation Spec.** If a template was fetched
     in step 3, follow its structure. Otherwise, use the default structure below.
@@ -332,6 +347,21 @@ been generated first. If omitted, the skill will ask.
     milestones.
 
     ### Author / Date / Status: Draft
+
+    ### 0. Corrections
+    **Include only if step 11a recorded one or more corrections for this
+    milestone.** Omit the section entirely otherwise.
+
+    Numbered list, one entry per correction, in `C-<n>` order:
+
+    - **C-<n>** — `<source doc> <section/ID>`: the source said
+      "<original_claim>"; the tree shows "<corrected_fact>" (evidence:
+      `<file:line or artefact>`, <date>).
+
+    This section exists so a reader can skip re-litigating premises the
+    code already settled. The original claim is quoted verbatim; it is not
+    deleted from the source document. Step 14a offers to add a matching
+    dated note to the source itself.
 
     ### 1. Architectural Decisions
     Table: Decision | Options Considered | Chosen Approach | Rationale
@@ -529,6 +559,50 @@ been generated first. If omitted, the skill will ask.
     - In `local` mode, step 13 has not run yet. Once the last milestone is
       drafted, run step 13 a single time, writing every milestone section into
       the one `jotdown.md`, each under its own `### Milestone N of M` heading.
+
+14a. **Propagate corrections to source documents.** Run this step only if
+    step 11a recorded at least one correction across the run. Otherwise skip.
+
+    - Present every correction (C-1, C-2, …) via `AskUserQuestion` with
+      `multiSelect: true`:
+
+      > "Phase 3 grounding found N contradictions in the source
+      > documents. Which should also be noted on the source document
+      > itself as a dated correction? The original claim stays — I only
+      > append a note."
+      >
+      > One option per correction: `C-<n>: <source> <section/ID> —
+      > <one-line summary>`.
+
+    - For every selected correction:
+      - Read the source document — PRD or Scoping Doc — via
+        `read_doc(feature, prd)` or `read_doc(feature, scoping-doc)`.
+      - Locate the paragraph, bullet, or table row that holds the
+        original claim. Do **not** delete, rewrite, or move it.
+      - Immediately after that paragraph/row, append a block of the form:
+
+        ```
+        > ⚠️ CORRECTION C-<n> (<YYYY-MM-DD>): <corrected_fact>.
+        > Verified against <evidence>. See Jot Down Section 0.
+        ```
+
+        In table rows where appending a block is awkward, add a new
+        trailing column cell or an inline footnote reference instead; the
+        exact rendering is the skill's choice as long as the correction
+        is dated, references `C-<n>`, and does not overwrite the
+        original.
+      - Write the updated document back via
+        `write_doc(feature, prd, <content>)` or
+        `write_doc(feature, scoping-doc, <content>)`.
+
+    - For corrections the user chose **not** to propagate, do nothing to
+      the source document. The Jot Down's Section 0 and the Decisions
+      table still carry the correction for the record.
+
+    - Report what was updated: the list of correction IDs applied to each
+      source document, with the artifact references. If a selected
+      correction's source document could not be located (free-text run,
+      no PRD/Scoping Doc), say so and skip only that one.
 
 15. **Return the artifact reference(s).** In `remote` mode, return all Notion
     page URLs, listed by milestone. In `local` mode, return the single file
