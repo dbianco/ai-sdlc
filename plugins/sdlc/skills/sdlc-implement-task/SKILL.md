@@ -32,7 +32,17 @@ $ARGUMENTS — In `remote` mode, a Linear issue identifier (e.g. `YAL-123`). In
    Call `read_task(ref)`, and let `feature` be the feature that `read_task`
    resolved `ref` within. Both are used throughout the rest of this
    procedure — `feature` by `list_tasks(feature)` below, `ref` by
-   `update_task_status(ref, ...)` in the abort paths and step 15. Read:
+   `update_task_status(ref, ...)` in the abort paths and step 15.
+
+   Read `task.kind` (default `code`) and the task's labels. If `kind` is
+   `acceptance-run` or the labels include `acceptance-run`, this is **not** a
+   code-writing task — the pipeline below (Coding Agent → Test Agent → …) is
+   replaced by step 8-alt. The orchestrator still reads the task, picks the
+   target repository, resolves domain context, and runs the safety and
+   preflight checks, but the implementing step is a single Acceptance Run
+   Agent spawn.
+
+   Read:
    - Title, description, acceptance criteria
    - Parent context — the parent issue in `remote` mode, `tasks/README.md` in
      `local` mode
@@ -208,7 +218,30 @@ $ARGUMENTS — In `remote` mode, a Linear issue identifier (e.g. `YAL-123`). In
     Record every discrepancy and the chosen disposition. These feed step 8
     (Coding Agent context), step 14 (user report), and step 16 (retrospective).
 
+    For `kind: acceptance-run` tasks, the "Coding Agent" references above
+    apply to the Acceptance Run Agent spawned in step 8-alt instead.
+
+7c. **If `kind` is `acceptance-run`, ask the head policy up front.** Present
+    the services the task names, each with the SHA the task expects, and
+    whether each matches `origin/main` right now. Via `AskUserQuestion`:
+
+    > "This is an acceptance-run task across <N> services. Some heads
+    > appear to be unmerged (<list the branch tips>). How should the run
+    > execute?"
+    >
+    > - **At merged heads** — the run checks out the merge commit on
+    >   `main` for each service. Unmerged branch tips are ignored.
+    > - **At the branch tips the task names** — the run records SHAs and
+    >   notes "unmerged" in the run log for each.
+    > - **Wait** — do not run. The user pushes and merges first; stop
+    >   this invocation.
+
+    Record the choice. The Acceptance Run Agent receives it as the head
+    policy input. For `kind: code` tasks, skip this step.
+
 8. **Spawn the Coding Agent** as a sub-agent via Task:
+   **Skip this step entirely when `kind` is `acceptance-run`; use step 8-alt
+   below instead.**
 
    Pass to the Coding Agent:
    - The task details (title, description, acceptance criteria)
@@ -226,7 +259,48 @@ $ARGUMENTS — In `remote` mode, a Linear issue identifier (e.g. `YAL-123`). In
 
    Read the Coding Agent instructions from `${CLAUDE_PLUGIN_ROOT}/agents/coding-agent.md`.
 
+8-alt. **Spawn the Acceptance Run Agent** (only when `kind` is
+   `acceptance-run`). Pass to the agent:
+   - The task details (title, description, acceptance criteria, the
+     acceptance script or sequence)
+   - The repository path(s) under test, each with the SHA the task expects
+   - The **head policy** chosen in step 7c
+   - **Isolation parameters** generated here: a unique compose project name
+     (e.g. `sdlc-acc-<task-id>-<short-random>`), a port offset derived from
+     a hash of the task id, and dedicated volume names of the same shape.
+     Record these so the final report can quote them.
+   - Each repo's CLAUDE.md content
+   - The workspace safety boundaries
+   - The **Preflight notes** block from step 7b, when any discrepancy was
+     recorded.
+
+   Read the Acceptance Run Agent instructions from
+   `${CLAUDE_PLUGIN_ROOT}/agents/acceptance-run-agent.md`.
+
+   **Handle Acceptance Run Agent results:**
+
+   - **PASS** — the run observed every criterion satisfied with real
+     measurements. Treat as the task's final successful outcome. Skip
+     steps 9–11a (Test, Security) and step 12 (Documentator); go to step
+     13 and commit the **run log** produced by the agent. In step 15,
+     call `update_task_status(ref, in_review)`.
+   - **PARTIAL** — the run completed but one or more criteria could not
+     be measured in this environment. Treat as a complete, honest result.
+     Skip steps 9–11a and 12. Go to step 13 and commit the run log. In
+     step 15, call `update_task_status(ref, partial, unmet)` where
+     `unmet` is the list of criteria the agent returned.
+   - **FAIL** — the run observed at least one criterion violated.
+     Surface the findings to the user. In step 15, call
+     `update_task_status(ref, blocked, reason)` with the failing
+     criteria as `reason`.
+   - **BLOCKED** — the run could not execute at all. Surface the cause.
+     In step 15, call `update_task_status(ref, blocked, reason)`.
+
+   An acceptance-run task never spawns the Coding, Test, Security, or
+   Documentator agents. The run log is the only artefact it produces.
+
 9. **Spawn the Test Agent** as a sub-agent via Task:
+   **Skip this step entirely when `kind` is `acceptance-run`.**
 
    Pass to the Test Agent:
    - The changes made by the Coding Agent (files modified)
@@ -246,8 +320,14 @@ $ARGUMENTS — In `remote` mode, a Linear issue identifier (e.g. `YAL-123`). In
      domain standards must not drop on retries, or later iterations will be
      held to weaker conventions than the first.
 
-11. **Ask whether to run the Security Agent.** The security scan is optional
-    and the user decides on every run. Present using `AskUserQuestion`:
+11. **Ask whether to run the Security Agent.**
+    **Skip this step entirely when `kind` is `acceptance-run`** — an
+    acceptance-run task produces a run log, not source changes, and the
+    Snyk scanners have nothing to analyse. Record the security status as
+    `SKIPPED — acceptance-run task, no source changes` and continue.
+
+    The security scan is optional and the user decides on every run.
+    Present using `AskUserQuestion`:
     - **Context**: the number of files modified by the Coding Agent, and the
       list of those files.
 
@@ -295,6 +375,8 @@ $ARGUMENTS — In `remote` mode, a Linear issue identifier (e.g. `YAL-123`). In
     - `SKIPPED — Snyk not configured` (Security Agent returned SKIPPED)
 
 12. **Spawn the Documentator Agent** as a sub-agent via Task:
+    **Skip this step entirely when `kind` is `acceptance-run`** — the run
+    log already written by the Acceptance Run Agent is the documentation.
 
     Pass to the Documentator Agent:
     - The changes made (files modified, new endpoints, schema changes)
@@ -312,43 +394,79 @@ $ARGUMENTS — In `remote` mode, a Linear issue identifier (e.g. `YAL-123`). In
 
     <bullet summary of changes>
 
-    Security: <PASS|PASS-WITH-FP|FAIL|SKIPPED> — <N findings remediated, M FPs documented, 'unresolved findings — see report', 'scan declined by user', or 'Snyk not configured'>"
+    Security: <PASS|PASS-WITH-FP|FAIL|SKIPPED> — <N findings remediated, M FPs documented, 'unresolved findings — see report', 'scan declined by user', 'Snyk not configured', or 'acceptance-run task, no source changes'>"
     ```
     `<task-id>` is the Linear issue id in `remote` mode, or the composite task
     id in `local` mode.
 
     Follow the repo's commit convention from CLAUDE.md if one exists.
     Always include the `Security:` trailer line — from the Security Agent
-    report when it ran, or `Security: SKIPPED — scan declined by user` when
-    the user skipped it at step 11. The trailer is never omitted, so every
-    commit records whether the code was scanned.
+    report when it ran, or the matching skip reason when it did not. The
+    trailer is never omitted, so every commit records whether the code was
+    scanned.
+
+    **For `kind: acceptance-run` tasks**, the committed artefact is the
+    **run log** produced by the Acceptance Run Agent, not source changes.
+    Use a commit message of the form:
+
+    ```
+    chore(<scope>): acceptance run for <task-id>
+
+    Implements <task-id>
+
+    Outcome: <PASS|PARTIAL|FAIL|BLOCKED>
+    Head policy: <merged|branch-tips|wait>
+    Isolation: compose project <name>, ports <offset>
+    Run log: <path to run log>
+    <unmet, when PARTIAL>
+
+    Security: SKIPPED — acceptance-run task, no source changes
+    ```
 
 14. **Report to the user:**
-    - Summary of changes made
-    - Test results (pass/fail counts, coverage)
+    - Summary of changes made (for `kind: code`) or **acceptance run
+      outcome** and run log path (for `kind: acceptance-run`)
+    - Test results (pass/fail counts, coverage) — omit for `acceptance-run`
     - Security scan results (status, findings remediated, FPs documented) —
-      or a note that the scan was skipped at the user's request
-    - Files modified (list)
+      or a note that the scan was skipped at the user's request, or that
+      it was skipped because this was an acceptance-run task
+    - Files modified (list) — for an acceptance-run task this is just the
+      run log
     - **Requirement trace** (when the task carried an `Implements:` line):
-      each requirement ID and the change that satisfies it, as reported by the
-      Coding Agent. Call out any ID with no corresponding change, and any file
-      modified that was not in the task's expected **Files** list. Neither is
-      automatically wrong — the breakdown's file list is best-effort — but an
-      unexplained drift between planned and actual scope is the thing a
-      reviewer most needs pointed at.
-    - Number of iteration cycles needed
+      each requirement ID and the change that satisfies it, as reported by
+      the Coding Agent — or by the Acceptance Run Agent, which cites the
+      run-log step that is evidence for each criterion. Call out any ID
+      with no corresponding change, and any file modified that was not in
+      the task's expected **Files** list. Neither is automatically wrong —
+      the breakdown's file list is best-effort — but an unexplained drift
+      between planned and actual scope is the thing a reviewer most needs
+      pointed at.
+    - Number of iteration cycles needed — omit for `acceptance-run`
     - **Preflight notes** (when any were recorded in step 7b): the list of
       task-file discrepancies, the user's disposition, and — if the user
-      chose "Proceed with notes" — which items the Coding Agent reports
-      having acted on.
+      chose "Proceed with notes" — which items the Coding Agent (or the
+      Acceptance Run Agent, for `kind: acceptance-run`) reports having
+      acted on.
+    - **Acceptance-run specifics** (only for `kind: acceptance-run`): the
+      head policy chosen in step 7c, the isolation parameters used, and
+      the `unmet:` list when the outcome was PARTIAL.
     - Ready for human review: `git diff main..HEAD`
 
-15. **Update the task status** to in-review. Call
+15. **Update the task status.** For `kind: code` tasks, call
     `update_task_status(ref, in_review)`.
 
-    In `remote` mode this sets the Linear issue to "In Review". In `local` mode
-    it rewrites the `status:` front-matter field to `in_review`, leaving the
-    rest of the file byte-identical.
+    For `kind: acceptance-run` tasks, choose the terminal state from the
+    Acceptance Run Agent's outcome:
+    - **PASS** → `update_task_status(ref, in_review)`.
+    - **PARTIAL** → `update_task_status(ref, partial, unmet)` where
+      `unmet` is the list of criterion IDs the run could not measure.
+    - **FAIL** or **BLOCKED** → `update_task_status(ref, blocked, reason)`.
+
+    In `remote` mode this sets the Linear issue status (and attaches the
+    reason as a comment when non-empty). In `local` mode it rewrites the
+    `status:` front-matter field in place and, when applicable, writes
+    `unmet:` or `blocked_reason:` as the artifact-store contract defines,
+    leaving the rest of the file byte-identical.
 
 ---
 
@@ -362,12 +480,17 @@ $ARGUMENTS — In `remote` mode, a Linear issue identifier (e.g. `YAL-123`). In
     - **Skill name**: `sdlc-implement-task`
     - **What was built**: the task id (Linear issue id in `remote` mode,
       composite task id in `local` mode), title, and branch name
-    - **Run summary**: number of Coding/Test Agent iteration cycles needed,
-      test results (pass/fail/coverage), whether the user opted into the
-      security scan and its status and finding counts, files modified count,
-      any safety boundary concerns, any preflight discrepancies recorded in
-      step 7b and how they were resolved, any user corrections or pushback
-      during the run
+    - **Run summary**: for `kind: code` tasks, number of Coding/Test Agent
+      iteration cycles needed, test results (pass/fail/coverage), whether
+      the user opted into the security scan and its status and finding
+      counts, files modified count, any safety boundary concerns, any
+      preflight discrepancies recorded in step 7b and how they were
+      resolved, any user corrections or pushback during the run. For
+      `kind: acceptance-run` tasks, the Acceptance Run Agent's outcome
+      (PASS/PARTIAL/FAIL/BLOCKED), the head policy chosen, the isolation
+      parameters, the `unmet:` list when PARTIAL, any preflight
+      discrepancies and their disposition, and any user corrections or
+      pushback during the run
     - **Workspace config**: the repository list from `.claude/settings.local.json`
 
 ## Important

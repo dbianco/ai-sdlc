@@ -42,7 +42,7 @@ Linear issue identifier.
 | `list_tasks(feature)` | Read every `<feature-dir>/tasks/*.md` except `README.md`; parse front-matter | Linear `list_issues` for the project |
 | `create_task(feature, task)` | Write `<feature-dir>/tasks/<NNN>-<slug>.md` using the task file format below | Linear `save_issue` |
 | `read_task(ref)` | Locate the task file by composite id or path; parse front-matter and body | Linear `get_issue` |
-| `update_task_status(ref, status, reason?)` | Rewrite the `status:` front-matter field in place. When `status` is `blocked` and `reason` is given, also write it to `blocked_reason:`. When `status` is anything other than `blocked`, delete any `blocked_reason:` line the file already carries — a reason must never outlive the blocked state it explains. Leave everything else byte-identical | Update the Linear issue status |
+| `update_task_status(ref, status, reason?)` | Rewrite the `status:` front-matter field in place. When `status` is `blocked` and `reason` is given, also write it to `blocked_reason:`. When `status` is `partial` and `reason` is given, write it to `unmet:` as a list (one entry per criterion/label). When `status` is anything other than `blocked`, delete any `blocked_reason:` line the file already carries, and when it is anything other than `partial`, delete any `unmet:` line — a reason must never outlive the state it explains. Leave everything else byte-identical | Update the Linear issue status |
 | `create_epic(feature)` | Write `<feature-dir>/tasks/README.md` — the index holding sequencing, critical path, and the requirement coverage table | Create the Linear parent issue |
 | `select_grouping()` | Return the milestone name to stamp into each task's `milestone:` field. Take the names from the source documents. If the documents define no milestones, use a single milestone named after the feature. Ask the user nothing | Prompt for the Linear project, then map or create milestones |
 
@@ -101,7 +101,8 @@ labels: [ai-sdlc, typescript]
 | ----- | -------- | ----- |
 | `id` | yes | `<feature-NNN>-<task-NNN>`. The filename carries only the task half |
 | `title` | yes | Verb-first |
-| `status` | yes | `todo` \| `in_progress` \| `in_review` \| `blocked` \| `done` |
+| `status` | yes | `todo` \| `in_progress` \| `in_review` \| `partial` \| `blocked` \| `done` |
+| `kind` | no | `code` (default) \| `acceptance-run`. Code tasks produce source changes; acceptance-run tasks execute an existing artefact against a sequence and record observations. The orchestrator routes to a different agent set for each |
 | `milestone` | yes | Free text, from `select_grouping` |
 | `repository` | yes | Must match a repository in `.claude/settings.local.json` |
 | `depends_on` | no | List of composite task ids |
@@ -111,6 +112,7 @@ labels: [ai-sdlc, typescript]
 | `estimate` | yes | PERT hours |
 | `labels` | no | |
 | `blocked_reason` | no | Short free text recording why the task was blocked; present only when `status:` is `blocked`. `update_task_status` removes it as soon as the task leaves that state |
+| `unmet` | no | List of acceptance-criterion IDs or short labels the run could not satisfy; present only when `status:` is `partial`. `update_task_status` removes it as soon as the task leaves that state |
 
 Status values mirror Linear's, so reporting language is identical in both modes.
 
