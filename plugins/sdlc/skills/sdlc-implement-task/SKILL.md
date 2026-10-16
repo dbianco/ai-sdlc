@@ -154,6 +154,60 @@ $ARGUMENTS — In `remote` mode, a Linear issue identifier (e.g. `YAL-123`). In
     Log to the user which domain skills were loaded, e.g.:
     `Domain context loaded: golang.md, backend-node.md`
 
+7b. **Verify the task file's premises against the tree.** The Jot Down's
+    preflight already spot-checks the Jot Down itself, but the task file is
+    generated from it and often carries concrete references the Jot Down
+    never stated: paths, exhaustive lists, message keys, routes, env vars,
+    assumptions about existing test or build harnesses. The Coding Agent is
+    handed the task file as its instructions — a false premise there turns
+    into "faithfully implements the wrong thing".
+
+    Scan the task file (title, description, acceptance criteria, Files list,
+    any embedded notes) and extract every concrete reference. For each
+    class, run the cheapest check that falsifies it:
+
+    | Reference class | Check |
+    |-----------------|-------|
+    | Named file paths (Files list, "the file at X") | `test -e <path>` in the target repo; mark new-file entries as expected-absent. |
+    | Exhaustive lists ("the N files that…", "the only place that…") | `rg -l` the pattern across the repo and compare the count/set against the task's claim. |
+    | Message / translation keys ("renders key X") | `rg -F '<key>'` in the repo; if the key is claimed to live on a specific code path, confirm the path references it. |
+    | Routes, endpoints, URL paths | `rg -F '<path>'` in route tables/registries; confirm the route is registered where the task says. |
+    | Env var names, flag names, Split names | `rg -F '<name>'` across source and config; flag any shadowed or absent. |
+    | Test / build infrastructure claims ("the e2e suite already uses X", "the harness forwards /api/\*") | Open the actual harness file(s) and confirm the behaviour: a Playwright `route.fulfill` with no `continue`/`fallback` does not forward, regardless of what the task says. |
+
+    These are cheap greps; budget a minute per class.
+
+    Classify each discrepancy:
+
+    - **Blocking** — the Coding Agent cannot implement the task correctly as
+      written. Examples: an acceptance criterion asserts a message key that
+      no code path emits; the Files list omits a file that must change for
+      the AC to be satisfiable; a premise about the test harness is false
+      in a way that makes the AC vacuous.
+    - **Advisory** — the premise is incomplete but the intent is clear.
+      Example: an exhaustive list of 5 files misses 1; the Coding Agent can
+      be told the full set.
+
+    Present discrepancies to the user via `AskUserQuestion`:
+
+    > "Preflight found N discrepancies between the task file and the tree.
+    > <per-item summary>. How should I proceed?"
+    >
+    > - **Pause so I can fix the task file** — stop here. The user edits
+    >   the task file (and the Jot Down, if the premise originated there);
+    >   re-run the skill.
+    > - **Proceed with notes** — continue. Pass every discrepancy to the
+    >   Coding Agent in step 8 as a "Preflight notes" block, instructing
+    >   it to treat the corrected facts as authoritative over the task
+    >   file where they differ.
+    > - **Abort** — stop the run.
+
+    If zero discrepancies are found, say so in one line and continue
+    silently.
+
+    Record every discrepancy and the chosen disposition. These feed step 8
+    (Coding Agent context), step 14 (user report), and step 16 (retrospective).
+
 8. **Spawn the Coding Agent** as a sub-agent via Task:
 
    Pass to the Coding Agent:
@@ -163,6 +217,10 @@ $ARGUMENTS — In `remote` mode, a Linear issue identifier (e.g. `YAL-123`). In
    - The repository path and CLAUDE.md content
    - The workspace safety boundaries
    - The `domain_context` block (if non-empty) as "Domain Engineering Standards"
+   - The **Preflight notes** block from step 7b, when any discrepancy was
+     recorded. Instruct the Coding Agent to treat the corrected facts as
+     authoritative over the task file where the two differ, and to note in
+     its final report which preflight items it acted on.
    - Instruction: "Implement the changes and write tests following the domain
      engineering standards provided (if any). Do not submit a PR."
 
@@ -279,6 +337,10 @@ $ARGUMENTS — In `remote` mode, a Linear issue identifier (e.g. `YAL-123`). In
       unexplained drift between planned and actual scope is the thing a
       reviewer most needs pointed at.
     - Number of iteration cycles needed
+    - **Preflight notes** (when any were recorded in step 7b): the list of
+      task-file discrepancies, the user's disposition, and — if the user
+      chose "Proceed with notes" — which items the Coding Agent reports
+      having acted on.
     - Ready for human review: `git diff main..HEAD`
 
 15. **Update the task status** to in-review. Call
@@ -302,8 +364,10 @@ $ARGUMENTS — In `remote` mode, a Linear issue identifier (e.g. `YAL-123`). In
       composite task id in `local` mode), title, and branch name
     - **Run summary**: number of Coding/Test Agent iteration cycles needed,
       test results (pass/fail/coverage), whether the user opted into the
-      security scan and its status and finding counts, files modified count, any safety boundary concerns, any user
-      corrections or pushback during the run
+      security scan and its status and finding counts, files modified count,
+      any safety boundary concerns, any preflight discrepancies recorded in
+      step 7b and how they were resolved, any user corrections or pushback
+      during the run
     - **Workspace config**: the repository list from `.claude/settings.local.json`
 
 ## Important
