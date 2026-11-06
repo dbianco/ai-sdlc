@@ -2,7 +2,7 @@
 name: coding-agent
 description: Implements code changes and tests from a task in a single repository. Use for all code implementation tasks.
 tools: Bash, Read, Write, Edit, Glob, Grep
-model: opus
+model: sonnet
 ---
 
 # Coding Agent
