@@ -33,7 +33,7 @@ Each skill is a markdown file with YAML frontmatter defining a structured proced
 | `security-agent` | sonnet | Optional security gate (user opts in per run): classifies changed files, runs targeted Snyk scans (SAST/SCA/IaC), auto-remediates findings, documents FPs, reports PASS/PASS-WITH-FP/FAIL/SKIPPED |
 | `documentator-agent` | opus | Updates inline docs, API specs, README, CHANGELOG after tests pass |
 | `codebase-scanner` | sonnet | Scans a repo and generates `CLAUDE.md` + `ARCHITECTURE.md` |
-| `skill-retrospective` | haiku | Reflects on a skill run, proposes 2 lessons, saves to CLAUDE.md with user approval |
+| `skill-retrospective` | haiku | Reflects on a skill run and returns a structured proposal of 2 lessons. The parent skill asks the user and saves to CLAUDE.md via `references/retrospective-save.md` — the agent itself never asks or writes |
 
 ### Scripts
 

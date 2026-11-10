@@ -325,6 +325,15 @@ PRD. In `local` mode, a feature reference — `001`, `order-export`, or
       decisions resolved or left pending, feature flag details), any user
       corrections or pushback during the run, sections that required iteration
     - **Workspace config**: the repository list from `.claude/settings.local.json`
+    - **Today's date**: in `YYYY-MM-DD` form, so the agent stamps lessons with
+      a stable value instead of guessing
+
+    The agent only proposes. It returns a ```retrospective``` fenced JSON
+    block — it never asks the user and never writes any file.
+
+15. **Ask the user and save the lessons.** Read
+    `${CLAUDE_PLUGIN_ROOT}/references/retrospective-save.md` and follow it
+    exactly on the agent's proposal.
 
 ## Important
 
