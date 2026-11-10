@@ -6,7 +6,7 @@ A Claude Code plugin that provides an AI-powered SDLC pipeline. The plugin is a 
 
 ## Components
 
-### Skills (10 slash commands)
+### Skills (11 slash commands)
 
 Each skill is a markdown file with YAML frontmatter defining a structured procedure Claude follows when the user invokes the corresponding slash command.
 
@@ -21,6 +21,7 @@ Each skill is a markdown file with YAML frontmatter defining a structured proced
 | `sdlc-implement-task` | Orchestrates Coding → Test → Security (optional, user-confirmed) → Documentator agents to implement a Linear issue |
 | `sdlc-init-claude-context` | Spawns `codebase-scanner` agents to generate `CLAUDE.md`/`ARCHITECTURE.md` for workspace repos |
 | `sdlc-install-pr-review` | Installs the `needs-human-review` GitHub Action workflow into each configured repository; seeds inputs from `sdlc.safety_boundaries` |
+| `sdlc-pr-triage` | Runs `needs-human-review` locally (`scripts/local-review.ts`) against the current branch and prints the verdict; never pushes or opens a PR |
 | `sdlc-workspace-sync` | Runs `workspace-sync.sh` to git-pull all workspace repos |
 
 ### Agents (6 sub-agents)
