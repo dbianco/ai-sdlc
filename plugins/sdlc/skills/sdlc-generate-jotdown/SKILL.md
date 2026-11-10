@@ -147,8 +147,22 @@ been generated first. If omitted, the skill will ask.
    a. **Affected repositories** — present the list from `settings.local.json`
       for selection (`multiSelect: true`). Always ask, even if inferred.
 
-   b. **Feature flag** — ask: "Does this work need a feature flag?" Collect
-      flag name, treatments, and default treatment if yes.
+   b. **Feature flag** — read `sdlc.feature_flags` from
+      `.claude/settings.local.json` first. If the key is missing or empty,
+      ask the user which of `Split.io`, `Environment variables or settings
+      tables`, or `None` applies — use the answer for this run and remind
+      them they can persist it via `/sdlc:sdlc-workspace-init`.
+
+      - If the setting is `none`: skip this step. No Section 8 in the output.
+      - If the setting is `split`: ask "Does this work need a feature flag?"
+        If yes, collect split name, traffic type, and treatments (default
+        `off`).
+      - If the setting is `env`: ask "Does this work need a feature flag?"
+        If yes, collect flag name, scope (`env var` / `settings table` /
+        `config file` / `other`), and default value.
+
+      If a Scoping Doc is in scope, its Section 8 may already carry these
+      values — pull from there rather than re-asking.
 
    c. **Data UI Inventory** — if the source context suggests frontend work
       (mentions UI, components, screens, pages, frontend, React, etc.), ask:
@@ -406,12 +420,15 @@ been generated first. If omitted, the skill will ask.
     ### 7. Dependencies
     External services, third-party APIs, shared libraries that need updates.
 
-    ### 8. Feature Flag (Split.io)
-    **Include only if a feature flag is needed** (from step 6b).
+    ### 8. Feature Flag
+    **Include only if a feature flag is needed** (from step 6b). Pick the
+    subsection that matches `sdlc.feature_flags` and drop the other.
 
-    If from a Scoping Doc, pull the split details from the Scoping Doc's
-    Section 8 (split name, treatments, default treatment). Otherwise, use
-    details gathered in step 6b and codebase analysis.
+    If from a Scoping Doc, pull the flag details from the Scoping Doc's
+    Section 8. Otherwise, use details gathered in step 6b and codebase
+    analysis.
+
+    **If `feature_flags` is `split`** (Split.io or equivalent SaaS):
 
     For each service that checks the flag:
     - **Service / Repo**: which service evaluates the split
@@ -420,8 +437,21 @@ been generated first. If omitted, the skill will ask.
     - **Key**: what value is used as the Split key (e.g. `org_id`, `user_id`)
     - **Treatment mapping**: what each treatment value means in code
       (e.g. `on` → use new endpoint, `off` → use legacy endpoint)
-    - **Fallback behavior**: what happens if the SDK can't reach Split
-      (must match the default treatment — safe/current behavior)
+    - **Fallback behavior**: what happens if the SDK can't reach the
+      platform (must match the default treatment — safe/current behavior)
+
+    **If `feature_flags` is `env`** (environment variables, settings
+    tables, or per-tenant kill switches):
+
+    For each service that reads the flag:
+    - **Service / Repo**: which service reads the flag
+    - **Scope**: `env var`, `settings table` row, `config file`, or other
+    - **Read point**: where in the code the flag is read (e.g. module
+      init, route handler, middleware)
+    - **Value mapping**: what each value means in code (e.g. `true` → new
+      path, `false` → legacy)
+    - **Fallback behavior**: what happens if the flag is unset or
+      unreachable (must match the default — safe/current behavior)
 
     ### 9. Deployment Stages
     Ordered list of what gets deployed when. Rollback plan for each stage.
