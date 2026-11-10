@@ -113,13 +113,80 @@ PRD. In `local` mode, a feature reference — `001`, `order-export`, or
    **If blocking items exist:**
    - List **every single one** to the user, grouped by section, including the
      exact marker text and its location in the document.
-   - Tell the user: "The PRD has unresolved items that must be completed before
-     a Scoping Document can be generated. Please resolve them and re-run this
-     skill." In `remote` mode, direct them to resolve the items in Notion —
-     the PRD page fetched in step 3. In `local` mode, direct them to the PRD
-     file instead — `doc_link(feature, prd)` (typically
-     `<feature-dir>/prd.md`).
+   - Then ask with `AskUserQuestion` how to proceed. Default: resolve inline.
+
+     - **Resolve inline** (default, recommended) — enter the per-blocker
+       loop below. Most blockers are closable by a decision or a
+       reclassification, and running a fresh session to resolve them costs
+       a context handoff. This is the path recorded as a workspace lesson
+       on prior runs.
+     - **Stop and resolve externally** — fall through to the "STOP" path.
+       Use this when the blockers need research the user cannot do right
+       now (e.g. external stakeholder input).
+
+   **If the user chose "Stop and resolve externally":**
+   - Tell the user: "The PRD has unresolved items that must be completed
+     before a Scoping Document can be generated. Please resolve them and
+     re-run this skill." In `remote` mode, direct them to the PRD page
+     fetched in step 3. In `local` mode, direct them to the PRD file —
+     `doc_link(feature, prd)` (typically `<feature-dir>/prd.md`).
    - **STOP. Do NOT proceed.** Do not generate a partial scoping doc.
+
+   **If the user chose "Resolve inline" — the blocker loop:**
+
+   Work through the blockers in batches of up to 4 via a single
+   `AskUserQuestion` call per batch. For each blocker, offer three options:
+
+   - **Resolve** — the user provides the answer inline. The skill folds it
+     into the PRD as a dated note (see "PRD write-back" below). The blocker
+     is cleared.
+   - **Reclassify as non-blocking** — the user explains why (free-text
+     follow-up). The blocker is kept but moves to the "Acknowledged TBDs
+     (non-blocking)" list, with the user's justification recorded.
+   - **Record as pending** — the blocker is real but cannot be closed now
+     (depends on code not yet read, external stakeholder, …). The item
+     moves to the scoping doc as `⚠️ PENDING DECISION: <description>` with
+     the user's one-line rationale. It stays blocking for the PRD gate
+     only if the user says so — otherwise it clears.
+
+   **Before any PRD write, verify the blocker is not stale.** If the
+   blocker references another feature, module, or deliverable ("deferred
+   to feature 033", "handled by the rollout service"), check it against
+   `origin/main` using the evidence rules in step 6. A blocker that the
+   tree has already answered is corrected in the PRD with a dated note
+   first — then the user answers against the corrected text, not the stale
+   one.
+
+   **PRD write-back.** After every batch, update the PRD content in memory:
+
+   - **Resolve:** append a dated note to the item, in this form:
+
+     ```
+     <original text>
+
+     > [<today YYYY-MM-DD>: resolved at scoping] <user answer>
+     ```
+
+   - **Reclassify:** append `> [<today>: reclassified non-blocking at
+     scoping] <user justification>`.
+
+   - **Record as pending:** leave the PRD text as-is and only record the
+     item in the scoping doc. Do not write a pending note into the PRD —
+     the item is still open.
+
+   **After the loop, write the modified PRD back to the artifact store.**
+   Ask the user once with `AskUserQuestion` to confirm the overwrite, show
+   the number of edits and the dated lines, and then call
+   `write_doc(feature, prd, <new content>)` with the merged text. Keep every
+   non-blocker line byte-identical. If the user declines the overwrite,
+   keep the resolutions in memory for the scoping doc only — the PRD is
+   left untouched, and the "Corrections to the PRD found at scoping"
+   section (see step 11, Section 1b) records what would have been written.
+
+   **After the loop, re-run the classification above.** Blockers that were
+   resolved or cleared as pending are gone. If any blocker remains (user
+   said a pending item must still block, or the user declined to resolve
+   some), fall through to the "STOP" path above with the remaining list.
 
    **If only non-blocking items exist:**
    - List them in an "Acknowledged TBDs (non-blocking)" section so the user
@@ -129,10 +196,66 @@ PRD. In `local` mode, a feature reference — `001`, `order-export`, or
 5. **Identify which repositories** from `.claude/settings.local.json` are relevant to this
    feature. If unclear, ask the user.
 
-6. **For each relevant repository**, read its `.claude/CLAUDE.md` and
-   `.claude/ARCHITECTURE.md` (if they exist) to understand architecture,
-   components, data flow, patterns, and constraints. If `.claude/CLAUDE.md`
-   does not exist, check for a legacy `CLAUDE.md` at the repository root.
+6. **Research each relevant repository against `origin/main`, not the
+   working tree.** The checkouts may sit on old task branches, and the
+   service `CLAUDE.md` / `ARCHITECTURE.md` files are frequently out of sync
+   with the code they describe. A PRD that passed three architectural
+   reviews can still carry claims the tree contradicts. Protect the scoping
+   doc from both.
+
+   **For every relevant repository**:
+
+   a. Spawn **one research sub-agent per repository** (or per repo group,
+      when repos share one service tree). In workspaces with 3+
+      repositories, run these agents in parallel via a single multi-call
+      dispatch — the queries do not depend on each other.
+
+   b. Each research agent **must read from `origin/main`, never the working
+      tree**, using commands like:
+
+      - `git -C <repo> show origin/main:<path>` to read a specific file at
+        `origin/main`.
+      - `git -C <repo> grep -n <pattern> origin/main -- <paths>` to search.
+      - `git -C <repo> ls-tree -r --name-only origin/main <path>` to list.
+
+      Do **not** read the working tree (`cat <repo>/<path>`,
+      `rg <pattern> <repo>`) for any claim that will land in the scoping
+      doc. Working-tree reads are only acceptable for `.claude/CLAUDE.md`
+      and `.claude/ARCHITECTURE.md`, which are high-level context — their
+      claims must still be verified against `origin/main` before they
+      reach the scoping doc.
+
+   c. For every claim the agent plans to carry into the scoping doc, it
+      must record the exact git command it ran and the verbatim output
+      (or the lines that matter from it). "File `src/x.ts` contains
+      function `foo`" is not a claim — "Running
+      `git -C service-a show origin/main:src/x.ts | grep -n 'function foo'`
+      returned `42:export function foo(...)`" is.
+
+   d. The agent returns a list of findings: each finding carries the
+      claim, the command, the verbatim output, and — when the claim
+      contradicts the PRD — a correction suggestion.
+
+   **Fold the corrections into the PRD.** For every finding where the
+   verbatim output contradicts the PRD (a contract the PRD said was not
+   vendored but is; a retention decision that assumes rows are deleted
+   when nothing deletes them; a counter the PRD placed in the wrong class;
+   a status value no code writes; a column the PRD said was absent on most
+   rows but is written on every row), surface it to the user via
+   `AskUserQuestion` using the same loop shape as step 4: **Correct the
+   PRD** (write a dated note), **Keep the PRD** (record the discrepancy as
+   a risk in the scoping doc instead), or **Investigate further** (log and
+   defer). Writing back to the PRD uses the same `write_doc` call as the
+   step-4 loop; collect corrections from both loops and write once.
+
+   Every correction accepted also appears in the scoping doc's "Corrections
+   to the PRD found at scoping" table (Section 1b in the template below).
+
+   If `.claude/CLAUDE.md` does not exist in a repository, check for a
+   legacy `CLAUDE.md` at the repository root. Flag missing or legacy
+   locations to the user and suggest they type
+   `/sdlc:sdlc-init-claude-context <repo>` after this run to regenerate
+   context.
 
 7. **Define milestones with the user.** Milestones are the delivery units of
    the scoping doc. Each milestone must represent a **fully functional product
@@ -229,6 +352,30 @@ PRD. In `local` mode, a feature reference — `001`, `order-export`, or
    PRD's Problem Statement (Section 1) and Business Case (Section 2). Link
    back to the PRD. Include the PRD's Goal IDs (G-x) that this scoping doc
    addresses.
+
+   ### 1b. Corrections to the PRD found at scoping
+   Include this section only when step 4's blocker loop or step 6's research
+   agents surfaced discrepancies the user accepted as corrections. Omit it
+   entirely if the PRD was byte-identical to what the tree says.
+
+   Table: Area | PRD claim (before) | Evidence against `origin/main` | Correction applied
+   | Writeback status
+
+   For every row:
+   - **Area**: which PRD section the claim came from (e.g. "Section 4,
+     Retention policy").
+   - **PRD claim (before)**: the PRD text as it was at the start of this
+     run, verbatim and short (quote the one sentence the correction
+     touched).
+   - **Evidence against `origin/main`**: the git command and the verbatim
+     line(s) of its output that justify the correction. One command per
+     claim, shown as a fenced block.
+   - **Correction applied**: the dated note the PRD now carries, or the
+     user's wording if they chose "Keep the PRD".
+   - **Writeback status**: `written back to prd.md` (or the Notion page URL)
+     when the user accepted the overwrite; `not written — kept here only`
+     when the user declined. Never "pending" — the user answered one way
+     or the other in step 4.
 
    ### 2. Problem
    Technical restatement of the problem. What needs to change in our systems?
