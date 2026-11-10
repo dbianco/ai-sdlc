@@ -24,27 +24,42 @@ review outputs, and approve artifacts at every stage. AI handles the toil.
 plugins/
 └── sdlc/
     ├── .claude-plugin/plugin.json    # Plugin manifest
-    ├── skills/                       # 9 slash commands
-    │   ├── workspace-init/
-    │   ├── init-claude-context/
-    │   ├── generate-prd/
-    │   ├── generate-scoping-doc/
-    │   ├── generate-data-ui-inventory/
-    │   ├── generate-jotdown/
-    │   ├── generate-task-breakdown/
-    │   ├── implement-task/
-    │   └── workspace-sync/
-    ├── agents/                       # 6 sub-agents
+    ├── skills/                       # 11 slash commands
+    │   ├── sdlc-workspace-init/
+    │   ├── sdlc-init-claude-context/
+    │   ├── sdlc-generate-prd/
+    │   ├── sdlc-generate-scoping-doc/
+    │   ├── sdlc-generate-data-ui-inventory/
+    │   ├── sdlc-generate-jotdown/
+    │   ├── sdlc-generate-task-breakdown/
+    │   ├── sdlc-implement-task/
+    │   ├── sdlc-install-pr-review/
+    │   ├── sdlc-pr-triage/
+    │   └── sdlc-workspace-sync/
+    ├── agents/                       # Sub-agents spawned by skills
     │   ├── coding-agent.md
     │   ├── test-agent.md
+    │   ├── security-agent.md
     │   ├── documentator-agent.md
     │   ├── codebase-scanner.md
-    │   └── skill-retrospective.md
+    │   ├── skill-retrospective.md
+    │   └── acceptance-run-agent.md
+    ├── domain-skills/                # Domain knowledge docs injected into the Coding Agent
+    ├── references/                   # Runtime contracts and templates read by skills
+    │   ├── artifact-store.md
+    │   ├── local-mode-smoke-test.md
+    │   └── needs-human-review-workflow.yml
     ├── hooks/hooks.json              # Event hooks
     ├── scripts/                      # Shell scripts (sync)
-    ├── templates/                    # Config templates
     └── .mcp.json                     # Playwright MCP server
 ```
+
+### PR triage gate (Needs Human Review)
+
+Two skills integrate [`alfonsograziano/needs-human-review`](https://github.com/alfonsograziano/needs-human-review) — a change-risk gate that decides whether every PR needs a human reviewer:
+
+- `/sdlc:sdlc-install-pr-review` installs `.github/workflows/needs-human-review.yml` into configured repositories, seeding `protected-paths`, `max-files-changed`, and `max-lines-changed` from `sdlc.safety_boundaries`. The workflow pins `@v2` and starts in `mode: shadow` (comment-only); teams move to `advisory` or `autonomous` by editing the file.
+- `/sdlc:sdlc-pr-triage` runs the same review locally against the current branch before a PR is opened. Discovers the tool via `$NEEDS_HUMAN_REVIEW_PATH`, then `<workspace>/../needs-human-review`, then `~/src/needs-human-review`.
 
 ### Marketplace manifest
 
