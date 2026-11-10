@@ -156,6 +156,7 @@ Skills read workspace config from `.claude/settings.local.json` under the
     "repositories": [
       { "name": "repo-name", "path": "./relative-path" }
     ],
+    "feature_flags": "split | env | none",
     "safety_boundaries": {
       "restricted_paths": [],
       "mandatory_human_review": ["**/.env*"],
@@ -165,6 +166,8 @@ Skills read workspace config from `.claude/settings.local.json` under the
   }
 }
 ```
+
+`feature_flags` steers the doc generators: `split` asks for Split.io-style fields (name, traffic type, treatments), `env` asks for in-repo fields (flag name, scope, default, fallback), and `none` skips the feature-flag section entirely. The generators ask once if the key is missing.
 
 ## Releasing
 

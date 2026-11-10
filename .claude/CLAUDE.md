@@ -67,7 +67,7 @@ The cache path pattern is `~/.claude/plugins/cache/TextraAI-sdlc/sdlc/<version>/
 
 ## Feature Flags
 
-No feature flag usage detected in this repo. The `sdlc-generate-jotdown` skill documents how to specify Split.io feature flag details for target repos (split name, treatments, key, evaluation point, fallback behavior) in Section 8 of the Jot Down spec.
+No feature flag usage detected in this repo. The doc generators (`sdlc-generate-scoping-doc` step 9, `sdlc-generate-jotdown` step 6b) read `sdlc.feature_flags` from the workspace config and branch on it: `split` prompts for Split.io-style fields (split name, traffic type, treatments, key, evaluation point), `env` prompts for in-repo fields (flag name, scope — env var / settings table / config file —, default, read point, fallback), and `none` skips the flag section entirely. When the key is missing or empty, the skill asks the user once for this run and reminds them to persist it via `/sdlc:sdlc-workspace-init`.
 
 ## After Making Changes
 

@@ -194,11 +194,18 @@ PRD. In `local` mode, a feature reference — `001`, `order-export`, or
    4 questions per `AskUserQuestion` call). Do NOT silently pick an approach
    — always ask.
 
-9. **Collect feature flag details.** After architectural decisions are resolved,
-   ask the user using `AskUserQuestion`:
+9. **Collect feature flag details.** After architectural decisions are
+   resolved, read `sdlc.feature_flags` from `.claude/settings.local.json` and
+   branch on its value. If the key is missing or empty, ask the user with
+   `AskUserQuestion` which of `Split.io`, `Environment variables or settings
+   tables`, or `None` applies to this workspace, use the answer for this run,
+   and remind them they can persist it by running `/sdlc:sdlc-workspace-init`.
 
-   > "This feature should be gated behind a feature flag in Split.io.
-   > Please create the split now and provide:
+   **If `feature_flags` is `split`** (Split.io or an equivalent SaaS
+   platform), ask with `AskUserQuestion`:
+
+   > "This feature should be gated behind a feature flag. Please create the
+   > split now and provide:
    >
    > 1. **Split name** (e.g. `enable_budget_export`)
    > 2. **Traffic type** — the entity that controls rollout:
@@ -208,11 +215,31 @@ PRD. In `local` mode, a feature reference — `001`, `order-export`, or
    >
    > If this feature does NOT need a feature flag, reply 'none'."
 
-   Record the user's answers. These will be written into the Scoping Doc
-   (Section 8) and flow downstream into the Jot Down and downstream tasks so
-   that coding agents can assume the split already exists in Split.io.
+   Downstream skills will assume the split already exists in the SaaS
+   platform and coding agents will use the SDK to evaluate it.
 
-   If the user replies "none", omit Section 8 from the output.
+   **If `feature_flags` is `env`** (environment variables, settings tables,
+   or per-tenant kill switches), ask with `AskUserQuestion`:
+
+   > "This feature should be gated behind an in-repo flag. Please provide:
+   >
+   > 1. **Flag name** (e.g. `BUDGET_EXPORT_ENABLED`)
+   > 2. **Scope** — where the flag is read: `env var`, `settings table`,
+   >    `config file`, or `other` (describe it)
+   > 3. **Default value** — the safe/current behavior when unset or
+   >    unreachable (e.g. `false`, `legacy`, `off`)
+   >
+   > If this feature does NOT need a flag, reply 'none'."
+
+   Downstream skills will assume the operator sets the flag before enabling
+   the feature, and the code must fall back to the default value when the
+   flag is unset or unreachable.
+
+   **If `feature_flags` is `none`**: skip this step entirely and omit
+   Section 8 from the output. Do not ask the user about flags.
+
+   If the user replies "none" to either of the above prompts, also omit
+   Section 8.
 
 10. **If a scoping doc template is configured and `sdlc.mode` is `remote`**,
     fetch and
@@ -269,18 +296,35 @@ PRD. In `local` mode, a feature reference — `001`, `order-export`, or
    ### 7. Affected Services
    Table: Service | Changes Required | Estimated Complexity (S/M/L)
 
-   ### 8. Feature Flag (Split.io)
+   ### 8. Feature Flag
    Include this section only if the user provided flag details in step 9.
+   Pick the subsection that matches `sdlc.feature_flags` and drop the other.
+
+   **If `feature_flags` is `split`:**
 
    | Field | Value |
    |-------|-------|
+   | Platform | Split.io (or equivalent SaaS) |
    | Split Name | `<split_name>` |
    | Traffic Type | `<traffic_type>` |
    | Treatments | `on` / `off` (default: `off`) |
 
    Downstream skills (Jot Down, Task Breakdown, Implement Task) will
    reference this split by name. The coding agent will assume the split
-   already exists in Split.io and will use the Split SDK to evaluate it.
+   already exists in the SaaS platform and will use the SDK to evaluate it.
+
+   **If `feature_flags` is `env`:**
+
+   | Field | Value |
+   |-------|-------|
+   | Platform | In-repo (`env var` / `settings table` / `config file`) |
+   | Flag Name | `<flag_name>` |
+   | Scope | `<scope>` |
+   | Default Value | `<default>` (fallback when unset or unreachable) |
+
+   Downstream skills will reference this flag by name. The coding agent
+   will read it at the scope you specified and fall back to the default
+   value when the flag is unset or unreachable.
 
 12. **Write the Scoping Doc.** Call `write_doc(feature, scoping-doc, <content>)`.
 

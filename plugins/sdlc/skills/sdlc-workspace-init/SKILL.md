@@ -197,6 +197,7 @@ $ARGUMENTS — Optional mode flag:
          "docs_database": ""
        },
        "repositories": [],
+       "feature_flags": "",
        "templates": {
          "prd": "313d53382b2381549bf1d4c554ce074d",
          "scoping_doc": "0dad30066fac46ffb1de88f0c05c0e90",
@@ -248,6 +249,11 @@ $ARGUMENTS — Optional mode flag:
 
    - `safety_boundaries.max_files_per_pr`: needs setup if missing. Default: `20`
    - `safety_boundaries.max_lines_per_pr`: needs setup if missing. Default: `500`
+   - `feature_flags`: needs setup if missing or empty. Accepted values:
+     `split` (Split.io or an equivalent SaaS flag platform), `env`
+     (environment variables, settings tables, or per-tenant kill switches
+     maintained in-repo), or `none` (this workspace does not gate features
+     behind flags).
 
    Do NOT assess or prompt the user about:
    - `sdlc.templates` — seeded with defaults in step 1.1, never changed after
@@ -317,6 +323,27 @@ $ARGUMENTS — Optional mode flag:
    `sdlc.safety_boundaries.max_lines_per_pr` to `500`. If the user provides
    custom values, use those instead.
 
+   **Feature flag platform** (only if missing or empty):
+   Ask with `AskUserQuestion`:
+
+   > "How does this workspace gate features behind flags? The doc
+   > generators (`/sdlc:sdlc-generate-scoping-doc`,
+   > `/sdlc:sdlc-generate-jotdown`) will ask the right fields based on
+   > this answer, and skip the feature-flag section entirely when the
+   > workspace does not use flags."
+
+   Options, in this order:
+   - **Split.io** — a SaaS flag platform. Splits have a name and a
+     traffic type; coding agents assume the split already exists and use
+     the SDK to evaluate it. Persist `"split"`.
+   - **Environment variables or settings tables** — flags live in
+     config (env vars, a config file, a per-tenant settings row, or a
+     kill switch). Persist `"env"`.
+   - **None** — this workspace does not use feature flags. The doc
+     generators skip the flag section. Persist `"none"`.
+
+   Write the chosen value to `sdlc.feature_flags`.
+
    Ask all missing fields in a single interaction — do not ask one at a time.
 
 2.3. **If any values were collected, update `.claude/settings.local.json`.**
@@ -329,6 +356,8 @@ $ARGUMENTS — Optional mode flag:
    - Preserve `sdlc.safety_boundaries.mandatory_human_review` — do not modify
    - `sdlc.safety_boundaries.max_files_per_pr` and `max_lines_per_pr` may be set
      if missing (seeded with defaults or user-provided values)
+   - `sdlc.feature_flags` may be set if missing (seeded with the user's
+     choice of `split`, `env`, or `none`)
    - Only update the specific fields that had placeholder values
    - Write the file back as UTF-8 with 2-space indented JSON, **without ASCII
      escaping** — every non-ASCII character already in the file must survive
