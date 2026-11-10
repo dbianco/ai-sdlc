@@ -1,0 +1,67 @@
+# Needs Human Review — PR triage gate
+#
+# This workflow is installed by `/sdlc:sdlc-install-pr-review`. It wakes up
+# after your CI workflow finishes on a PR and decides, by rules you control
+# first and an AI reviewer second, whether the PR needs a human to look at it.
+#
+# Upstream: https://github.com/alfonsograziano/needs-human-review
+#
+# Before this starts acting on real PRs:
+#   1. Add an Anthropic API key to this repository as a secret named `API_KEY`
+#      (Settings → Secrets and variables → Actions).
+#   2. Replace `__CI_WORKFLOW_NAME__` below with the exact `name:` of the CI
+#      workflow whose completion should trigger the review.
+#   3. Review the `protected-paths` list and adjust it to match this repo.
+#   4. Keep `mode: shadow` for the first few weeks so the action only comments
+#      with what it would have done. Move to `advisory` or `autonomous` once
+#      its verdicts match your reviewers'.
+
+name: Needs Human Review
+
+on:
+  workflow_run:
+    workflows: [__CI_WORKFLOW_NAME__]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  statuses: write
+  checks: read
+  actions: read
+
+concurrency:
+  group: needs-human-review-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  review:
+    if: github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+          # Fork PRs need this since checkout v7. The action only reads files,
+          # never runs them; do not add build or test steps to this job.
+          allow-unsafe-pr-checkout: true
+
+      - uses: alfonsograziano/needs-human-review@v2
+        with:
+          # shadow: comment only. advisory: label + commit status.
+          # autonomous: merges when no human review is needed.
+          mode: shadow
+          api-key: ${{ secrets.API_KEY }}
+          # Paths that always need a human. Renames count under the old name
+          # too. Globs follow `.gitignore` semantics.
+          protected-paths: |
+            __PROTECTED_PATHS__
+          # Size caps that send big PRs to a human. 0 is off. The installer
+          # seeds these from `sdlc.safety_boundaries.max_{files,lines}_per_pr`
+          # when present.
+          max-files-changed: '__MAX_FILES_CHANGED__'
+          max-lines-changed: '__MAX_LINES_CHANGED__'
