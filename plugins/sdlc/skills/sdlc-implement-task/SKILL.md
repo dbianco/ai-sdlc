@@ -637,11 +637,22 @@ every task.
       remediations that are not present in the summary; if a proposed
       lesson has no backing line, drop it instead of hedging."*
     - **Workspace config**: the repository list from `.claude/settings.local.json`
+    - **Target repo path**: the path of the repo whose code was changed, so
+      the agent can recommend that repo's CLAUDE.md as the target
+    - **Today's date**: in `YYYY-MM-DD` form, so the agent stamps lessons with
+      a stable value instead of guessing
+
+    The agent only proposes. It returns a ```retrospective``` fenced JSON
+    block — it never asks the user and never writes any file.
 
     When a multi-ref run is in progress, the retrospective runs **once**
     at the end of the loop and receives every task's step-14 report
     concatenated verbatim. The agent still proposes exactly two lessons
     across the whole run, not two per task.
+
+17. **Ask the user and save the lessons.** Read
+    `${CLAUDE_PLUGIN_ROOT}/references/retrospective-save.md` and follow it
+    exactly on the agent's proposal.
 
 ## Important
 

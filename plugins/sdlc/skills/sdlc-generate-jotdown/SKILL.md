@@ -625,6 +625,15 @@ been generated first. If omitted, the skill will ask.
       key architectural decisions made, gaps that required user input, sections
       that needed iteration, any user corrections or pushback during the run
     - **Workspace config**: the repository list from `.claude/settings.local.json`
+    - **Today's date**: in `YYYY-MM-DD` form, so the agent stamps lessons with
+      a stable value instead of guessing
+
+    The agent only proposes. It returns a ```retrospective``` fenced JSON
+    block — it never asks the user and never writes any file.
+
+17. **Ask the user and save the lessons.** Read
+    `${CLAUDE_PLUGIN_ROOT}/references/retrospective-save.md` and follow it
+    exactly on the agent's proposal.
 
 ## Important
 
