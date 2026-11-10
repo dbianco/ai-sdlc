@@ -27,7 +27,7 @@ Markdown + YAML frontmatter (skills/agents), Bash (scripts/hooks), JSON (manifes
 | `plugins/sdlc/skills/*/SKILL.md` | 10 slash commands (each a markdown + YAML file) |
 | `plugins/sdlc/agents/*.md` | 6 sub-agents spawned by skills |
 | `plugins/sdlc/domain-skills/*.md` | 5 domain knowledge docs injected into the Coding Agent prompt by `sdlc-implement-task` (not slash commands) |
-| `plugins/sdlc/references/*.md` | Contracts read by skills at runtime (`artifact-store.md`, `local-mode-smoke-test.md`) |
+| `plugins/sdlc/references/*` | Contracts and templates read by skills at runtime (`artifact-store.md`, `local-mode-smoke-test.md`, `needs-human-review-workflow.yml`) |
 | `plugins/sdlc/scripts/` | Bash scripts (`workspace-sync.sh`) |
 | `plugins/sdlc/hooks/hooks.json` | Lifecycle event hooks (currently empty) |
 | `plugins/sdlc/.mcp.json` | Playwright MCP server (only MCP bundled here; Snyk is global via `~/.claude.json`) |
@@ -90,6 +90,7 @@ If inconsistencies or gaps are found, report them to the user and ask how they'd
 - Requirement traceability runs PRD → Linear → code: `generate-task-breakdown` writes an `Implements: REQ-xx, US-xx` line plus an expected **Files** list on every issue, `implement-task` forwards both to the Coding Agent, and the Coding Agent reports a requirement trace and any scope drift. `INFRA` is the marker for tasks with no user-facing requirement.
 - `sdlc-implement-task` orchestrates sub-agents only; it does NOT write code itself. Branch format: `ai/<issue-id>-<slugified-title>`. Pipeline order: Coding Agent → Test Agent → Security Agent (optional — user is asked each run) → Documentator Agent → Commit. The commit always carries a `Security:` trailer, including `SKIPPED — scan declined by user`.
 - The pipeline has two artifact backends, selected by `sdlc.mode` in `.claude/settings.local.json`: `remote` (Notion + Linear, the default when the key is absent) and `local` (markdown under `.sdlc/features/NNN-slug/`). Skills never call Notion or Linear directly — they use the operations in `plugins/sdlc/references/artifact-store.md`. Local mode exists for zero-setup evaluation; there is no promotion or sync path between the two.
+- `sdlc-install-pr-review` installs `.github/workflows/needs-human-review.yml` into each configured repository from the template at `plugins/sdlc/references/needs-human-review-workflow.yml`. The workflow invokes `alfonsograziano/needs-human-review@v2` (external, Alfonso Graziano), which runs after CI on every PR and decides — hard rules first, AI reviewer second — whether a human reviewer is needed. The skill always writes the file in `mode: shadow` and leaves the file uncommitted. It never changes the workspace config; it reads `sdlc.safety_boundaries.{restricted_paths, max_files_per_pr, max_lines_per_pr}` to seed the workflow inputs. `sdlc-workspace-init` Phase 8.4 points users to this skill when a repository lacks the workflow.
 
 ## Lessons Learned
 

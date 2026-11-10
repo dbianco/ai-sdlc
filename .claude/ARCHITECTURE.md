@@ -20,6 +20,7 @@ Each skill is a markdown file with YAML frontmatter defining a structured proced
 | `sdlc-generate-task-breakdown` | Decomposes a Jot Down into PERT-sequenced Linear issues |
 | `sdlc-implement-task` | Orchestrates Coding → Test → Security (optional, user-confirmed) → Documentator agents to implement a Linear issue |
 | `sdlc-init-claude-context` | Spawns `codebase-scanner` agents to generate `CLAUDE.md`/`ARCHITECTURE.md` for workspace repos |
+| `sdlc-install-pr-review` | Installs the `needs-human-review` GitHub Action workflow into each configured repository; seeds inputs from `sdlc.safety_boundaries` |
 | `sdlc-workspace-sync` | Runs `workspace-sync.sh` to git-pull all workspace repos |
 
 ### Agents (6 sub-agents)

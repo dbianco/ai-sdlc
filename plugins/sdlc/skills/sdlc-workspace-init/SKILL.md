@@ -812,15 +812,17 @@ Snyk and Playwright are unaffected — they are local tools and Phase 6 still ru
     - Does `.claude/CLAUDE.md` exist in the repository?
     - Does `.claude/ARCHITECTURE.md` exist in the repository?
     - Does a legacy `CLAUDE.md` file exist at the repository root?
+    - Does `.github/workflows/needs-human-review.yml` exist (the PR triage
+      gate installed by `/sdlc:sdlc-install-pr-review`)?
 
     ```
     Repositories
     ──────────────────────────────────────────────────────────────────────────────
-    Repository          Path             Exists   CLAUDE.md              ARCH.md
+    Repository          Path             Exists   CLAUDE.md              ARCH.md   PR triage
     ──────────────────────────────────────────────────────────────────────────────
-    api-gateway         ./api-gateway    Yes      No                     No
-    commerce-service    ./commerce-svc   Yes      .claude/CLAUDE.md      Yes
-    web-app             ./web-app        Yes      CLAUDE.md (root!)      No
+    api-gateway         ./api-gateway    Yes      No                     No        No
+    commerce-service    ./commerce-svc   Yes      .claude/CLAUDE.md      Yes       Yes
+    web-app             ./web-app        Yes      CLAUDE.md (root!)      No        No
     ```
 
     If a repository has `CLAUDE.md` at the root but NOT in `.claude/`,
@@ -852,6 +854,12 @@ Snyk and Playwright are unaffected — they are local tools and Phase 6 still ru
       plugins to improve code quality — Claude Code will have access to
       real-time type checking, go-to-definition, and up-to-date library
       docs. Run the `/plugin install` commands listed above."
+    - If any repository is missing
+      `.github/workflows/needs-human-review.yml`: "Install the PR triage
+      gate with `/sdlc:sdlc-install-pr-review`. It runs after CI on every
+      PR and decides, by rules you control, whether a human needs to
+      review. Starts in shadow mode (comment-only) — you choose when to
+      let it act."
     - If everything is green: "You are all set! Try
       `/sdlc:sdlc-generate-prd <your feature idea>` to create your first PRD."
 
