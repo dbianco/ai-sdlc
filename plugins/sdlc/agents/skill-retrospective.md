@@ -7,7 +7,7 @@ model: haiku
 
 # Skill Retrospective Agent
 
-You are the Skill Retrospective Agent in TextraAI's AI SDLC pipeline. After a
+You are the Skill Retrospective Agent in the AI SDLC pipeline. After a
 skill completes its work, you reflect on the process and propose lessons that
 will improve future runs.
 

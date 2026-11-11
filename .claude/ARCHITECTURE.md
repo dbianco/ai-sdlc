@@ -2,7 +2,7 @@
 
 ## Overview
 
-A Claude Code plugin that provides an AI-powered SDLC pipeline. The plugin is a collection of markdown skill definitions, agent definitions, bash scripts, and JSON manifests that Claude Code interprets. It lives under `plugins/sdlc/` and is distributed via the `TextraAI-sdlc` marketplace.
+A Claude Code plugin that provides an AI-powered SDLC pipeline. The plugin is a collection of markdown skill definitions, agent definitions, bash scripts, and JSON manifests that Claude Code interprets. It lives under `plugins/sdlc/` and is distributed via the `ai-sdlc` marketplace.
 
 ## Components
 
@@ -16,9 +16,9 @@ Each skill is a markdown file with YAML frontmatter defining a structured proced
 | `sdlc-generate-prd` | Generates an 11-section PRD in Notion from a feature description |
 | `sdlc-generate-scoping-doc` | Generates a Scoping Doc in Notion from a PRD |
 | `sdlc-generate-data-ui-inventory` | Generates a frontend component/payload inventory in Notion |
-| `sdlc-generate-jotdown` | Generates a self-sufficient Jot Down Implementation Spec from any source (Scoping Doc, Linear issue, Slack thread, or free text) |
-| `sdlc-generate-task-breakdown` | Decomposes a Jot Down into PERT-sequenced Linear issues |
-| `sdlc-implement-task` | Orchestrates Coding → Test → Security (optional, user-confirmed) → Documentator agents to implement a Linear issue |
+| `sdlc-generate-jotdown` | Generates a self-sufficient Jot Down Implementation Spec from any source (Scoping Doc, Jira/Linear issue, Slack thread, or free text) |
+| `sdlc-generate-task-breakdown` | Decomposes a Jot Down into PERT-sequenced Jira/Linear issues |
+| `sdlc-implement-task` | Orchestrates Coding → Test → Security (optional, user-confirmed) → Documentator agents to implement a Jira/Linear issue |
 | `sdlc-init-claude-context` | Spawns `codebase-scanner` agents to generate `CLAUDE.md`/`ARCHITECTURE.md` for workspace repos |
 | `sdlc-install-pr-review` | Installs the `needs-human-review` GitHub Action workflow into each configured repository; seeds inputs from `sdlc.safety_boundaries` |
 | `sdlc-pr-triage` | Runs `needs-human-review` locally (`scripts/local-review.ts`) against the current branch and prints the verdict; never pushes or opens a PR |
@@ -28,7 +28,7 @@ Each skill is a markdown file with YAML frontmatter defining a structured proced
 
 | Agent | Model | Role |
 |-------|-------|------|
-| `coding-agent` | opus | Implements code changes + tests from a Linear issue |
+| `coding-agent` | opus | Implements code changes + tests from a Jira/Linear issue |
 | `test-agent` | opus | Quality gate: runs tests, checks coverage, writes missing tests, reports PASS/FAIL |
 | `security-agent` | sonnet | Optional security gate (user opts in per run): classifies changed files, runs targeted Snyk scans (SAST/SCA/IaC), auto-remediates findings, documents FPs, reports PASS/PASS-WITH-FP/FAIL/SKIPPED |
 | `documentator-agent` | opus | Updates inline docs, API specs, README, CHANGELOG after tests pass |
@@ -57,7 +57,7 @@ User idea
   → /sdlc-generate-scoping-doc   (Notion Scoping Doc — validates PRD completeness)
   → /sdlc-generate-jotdown       (Notion Jot Down — self-sufficient spec; any source)
       ↗ /sdlc-generate-data-ui-inventory  (parallel, for UI features)
-  → /sdlc-generate-task-breakdown (Linear issues with PERT sequencing)
+  → /sdlc-generate-task-breakdown (Jira/Linear issues with PERT sequencing)
   → /sdlc-implement-task          (code on branch ai/<issue-id>-<title>)
 ```
 
@@ -93,7 +93,7 @@ sdlc-implement-task (orchestrator)
 
 ### External Services (MCP — Claude built-in OAuth)
 - **Notion** — document creation and reading for all doc-generation skills
-- **Linear** — issue fetching, creation, status updates for task breakdown and implementation
+- **Jira/Linear** — issue fetching, creation, status updates for task breakdown and implementation
 - **Figma** — design reference fetching (optional; only for data-ui-inventory)
 
 ### Custom MCP

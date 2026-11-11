@@ -3,7 +3,7 @@
 Skills in this plugin read and write artifacts — PRDs, Scoping Docs, Jot Downs,
 Data UI Inventories, and tasks — through the operations below. Two
 implementations exist. A skill picks one based on `sdlc.mode` and then never
-names Notion or Linear again.
+names Notion or Jira/Linear again.
 
 ## Resolving the mode
 
@@ -12,7 +12,7 @@ Read `sdlc.mode` from `.claude/settings.local.json` in the workspace root.
 | Value | Implementation |
 | ----- | -------------- |
 | `"local"` | Local files, below |
-| `"remote"` | Notion + Linear, below |
+| `"remote"` | Notion + Jira/Linear, below |
 | absent or empty | `remote` — this is the default, so existing workspaces are unaffected |
 
 If `sdlc.mode` is `"local"` and `.sdlc/` does not exist, create it. That is
@@ -28,23 +28,23 @@ three-digit number and a slug: `001-order-export`.
 `ref` — however the user named a thing in `$ARGUMENTS`. Locally a feature ref
 is `001`, `order-export`, `001-order-export`, or a path; a task ref is `001-002`
 or a path. Remotely a feature ref is a Notion URL or page ID and a task ref is a
-Linear issue identifier.
+Jira/Linear issue identifier.
 
 ## Operations
 
 | Operation | Local | Remote |
 | --------- | ----- | ------ |
-| `new_feature(name)` | Create `.sdlc/features/NNN-slug/`, where NNN is the lowest unused three-digit number and slug is the kebab-cased name | Bind the feature to its name — that name titles the Notion page `write_doc` then creates. Create nothing else: no second page, and never a Linear project. Linear is touched only where it always was, by `generate-task-breakdown` |
+| `new_feature(name)` | Create `.sdlc/features/NNN-slug/`, where NNN is the lowest unused three-digit number and slug is the kebab-cased name | Bind the feature to its name — that name titles the Notion page `write_doc` then creates. Create nothing else: no second page, and never a Jira/Linear project. Jira/Linear is touched only where it always was, by `generate-task-breakdown` |
 | `resolve_feature(ref)` | Match ref against directory names under `.sdlc/features/`. On no match, list what exists and ask. On multiple matches, ask | Fetch the Notion page by URL or ID |
 | `read_doc(feature, kind)` | Read `<feature-dir>/<kind>.md`. Missing file is a reportable absence, not a crash | `notion-fetch` the page |
 | `write_doc(feature, kind, content)` | Write `<feature-dir>/<kind>.md`; return the path relative to the workspace root | Create the page in the configured docs database; return its URL |
 | `doc_link(feature, kind)` | Return `./<kind>.md` | Return the Notion page URL |
-| `list_tasks(feature)` | Read every `<feature-dir>/tasks/*.md` except `README.md`; parse front-matter | Linear `list_issues` for the project |
-| `create_task(feature, task)` | Write `<feature-dir>/tasks/<NNN>-<slug>.md` using the task file format below | Linear `save_issue` |
-| `read_task(ref)` | Locate the task file by composite id or path; parse front-matter and body | Linear `get_issue` |
-| `update_task_status(ref, status, reason?)` | Rewrite the `status:` front-matter field in place. When `status` is `blocked` and `reason` is given, also write it to `blocked_reason:`. When `status` is `partial` and `reason` is given, write it to `unmet:` as a list (one entry per criterion/label). When `status` is anything other than `blocked`, delete any `blocked_reason:` line the file already carries, and when it is anything other than `partial`, delete any `unmet:` line — a reason must never outlive the state it explains. Leave everything else byte-identical | Update the Linear issue status |
-| `create_epic(feature)` | Write `<feature-dir>/tasks/README.md` — the index holding sequencing, critical path, and the requirement coverage table | Create the Linear parent issue |
-| `select_grouping()` | Return the milestone name to stamp into each task's `milestone:` field. Take the names from the source documents. If the documents define no milestones, use a single milestone named after the feature. Ask the user nothing | Prompt for the Linear project, then map or create milestones |
+| `list_tasks(feature)` | Read every `<feature-dir>/tasks/*.md` except `README.md`; parse front-matter | Jira/Linear `list_issues` for the project |
+| `create_task(feature, task)` | Write `<feature-dir>/tasks/<NNN>-<slug>.md` using the task file format below | Jira/Linear `save_issue` |
+| `read_task(ref)` | Locate the task file by composite id or path; parse front-matter and body | Jira/Linear `get_issue` |
+| `update_task_status(ref, status, reason?)` | Rewrite the `status:` front-matter field in place. When `status` is `blocked` and `reason` is given, also write it to `blocked_reason:`. When `status` is `partial` and `reason` is given, write it to `unmet:` as a list (one entry per criterion/label). When `status` is anything other than `blocked`, delete any `blocked_reason:` line the file already carries, and when it is anything other than `partial`, delete any `unmet:` line — a reason must never outlive the state it explains. Leave everything else byte-identical | Update the Jira/Linear issue status |
+| `create_epic(feature)` | Write `<feature-dir>/tasks/README.md` — the index holding sequencing, critical path, and the requirement coverage table | Create the Jira/Linear parent issue |
+| `select_grouping()` | Return the milestone name to stamp into each task's `milestone:` field. Take the names from the source documents. If the documents define no milestones, use a single milestone named after the feature. Ask the user nothing | Prompt for the Jira/Linear project, then map or create milestones |
 
 ## Local layout
 
@@ -115,7 +115,7 @@ labels: [ai-sdlc, typescript]
 | `blocked_reason` | no | Short free text recording why the task was blocked; present only when `status:` is `blocked`. `update_task_status` removes it as soon as the task leaves that state |
 | `unmet` | no | List of acceptance-criterion IDs or short labels the run could not satisfy; present only when `status:` is `partial`. `update_task_status` removes it as soon as the task leaves that state |
 
-Status values mirror Linear's, so reporting language is identical in both modes.
+Status values mirror Jira/Linear's, so reporting language is identical in both modes.
 
 ## Failure handling
 

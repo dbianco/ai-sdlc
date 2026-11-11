@@ -2,12 +2,12 @@
 
 **Date:** 2026-08-13
 **Status:** Approved, not yet implemented
-**Scope:** `plugins/sdlc` — a file-based artifact backend so the pipeline runs without Notion or Linear
+**Scope:** `plugins/sdlc` — a file-based artifact backend so the pipeline runs without Notion or Jira/Linear
 
 ## Problem
 
 The SDLC pipeline currently cannot start without a configured Notion workspace
-and Linear team. `/sdlc-workspace-init` collects a Linear team, a Notion home
+and Jira/Linear team. `/sdlc-workspace-init` collects a Jira/Linear team, a Notion home
 directory, a docs database, and four Notion template page IDs before anything
 else works, and `generate-prd` and `generate-jotdown` each abort on a Notion
 permission preflight.
@@ -26,7 +26,7 @@ target is that a first run needs no external account, no OAuth, and no
 configuration beyond answering one question in `workspace-init`.
 
 This purpose sets the bar for everything below: where fidelity to the
-Notion/Linear flow costs little, keep it; where it costs a lot, drop it and say
+Notion/Jira/Linear flow costs little, keep it; where it costs a lot, drop it and say
 so.
 
 ## Goals
@@ -34,7 +34,7 @@ so.
 1. The full four-document chain — PRD → Scoping Doc → Jot Down → Task Breakdown
    — plus `implement-task`, runs against local files.
 2. A local run exercises the same templates, the same validation gates, and the
-   same requirement traceability as a Notion/Linear run. What someone evaluates
+   same requirement traceability as a Notion/Jira/Linear run. What someone evaluates
    is the real product, not a reduced imitation.
 3. Existing workspaces are unaffected. No migration, no config rewrite, no
    behavior change when `sdlc.mode` is absent.
@@ -43,7 +43,7 @@ so.
 
 ## Non-goals
 
-- **No promotion path.** Local artifacts never become Notion pages or Linear
+- **No promotion path.** Local artifacts never become Notion pages or Jira/Linear
   issues. Someone who likes the pipeline configures it properly and re-runs the
   doc chain. This removes template mapping, ID rewriting, and re-run
   idempotency from scope.
@@ -92,28 +92,28 @@ New file: `plugins/sdlc/references/artifact-store.md`. This introduces a
 `references/` directory, which the plugin does not have today.
 
 It defines eleven operations, each with a local and a remote implementation.
-Skills invoke operations by name and never reference Notion or Linear directly.
+Skills invoke operations by name and never reference Notion or Jira/Linear directly.
 
 | Operation | Local | Remote |
 |---|---|---|
-| `new_feature(name)` | create `.sdlc/features/NNN-slug/`, NNN = next unused | Notion page + Linear project |
+| `new_feature(name)` | create `.sdlc/features/NNN-slug/`, NNN = next unused | Notion page + Jira/Linear project |
 | `resolve_feature(ref)` | match slug, `NNN`, or path under `.sdlc/features/` | Notion URL / page ID |
 | `read_doc(feature, kind)` | read `<kind>.md` | fetch Notion page |
 | `write_doc(feature, kind, content)` | write `<kind>.md`; return relative path | create page in docs DB; return URL |
 | `doc_link(feature, kind)` | relative path (`./prd.md`) | Notion URL |
-| `list_tasks(feature)` | parse `tasks/*.md` front-matter | Linear `list_issues` |
-| `create_task(feature, task)` | write `tasks/NNN-slug.md` | Linear `save_issue` |
-| `read_task(ref)` | task file by ID or path | Linear `get_issue` |
-| `update_task_status(ref, status)` | rewrite `status:` front-matter | Linear status update |
-| `create_epic(feature)` | write `tasks/README.md` index | Linear parent issue |
-| `select_grouping()` | `milestone:` front-matter field | Linear project + milestone pickers |
+| `list_tasks(feature)` | parse `tasks/*.md` front-matter | Jira/Linear `list_issues` |
+| `create_task(feature, task)` | write `tasks/NNN-slug.md` | Jira/Linear `save_issue` |
+| `read_task(ref)` | task file by ID or path | Jira/Linear `get_issue` |
+| `update_task_status(ref, status)` | rewrite `status:` front-matter | Jira/Linear status update |
+| `create_epic(feature)` | write `tasks/README.md` index | Jira/Linear parent issue |
+| `select_grouping()` | `milestone:` front-matter field | Jira/Linear project + milestone pickers |
 
 `kind` is one of `prd`, `scoping-doc`, `jotdown`, `data-ui-inventory`.
 
 ### Notes on three operations
 
 **`select_grouping` is where local mode is genuinely simpler.** Steps 2 and 3
-of `generate-task-breakdown` — list Linear projects, require the user to pick
+of `generate-task-breakdown` — list Jira/Linear projects, require the user to pick
 one, list or create milestones, refuse to proceed without both — collapse to a
 front-matter field. Removing those two blocking prompts is most of the
 first-run speed gain.
@@ -125,7 +125,7 @@ chase behaves identically in both modes.
 
 **Task dependencies and the `Implements:` line need no operation.** Both are
 front-matter and body text in a task file, which is what they already are
-inside a Linear issue description.
+inside a Jira/Linear issue description.
 
 ## On-disk layout
 
@@ -195,7 +195,7 @@ Field reference:
 | `estimate` | yes | breakdown step 7 | PERT hours |
 | `labels` | no | breakdown step 7 | |
 
-**Status vocabulary mirrors Linear's** so `implement-task` sets `in_review` in
+**Status vocabulary mirrors Jira/Linear's** so `implement-task` sets `in_review` in
 both modes and downstream reporting language is unchanged.
 
 **Branch naming becomes `ai/001-002-add-csv-export-endpoint`** — the composite
@@ -221,18 +221,18 @@ prunes the wizard:
 
 | Init phase | `remote` | `local` |
 |---|---|---|
-| 2 — field collection | asks Linear team, Notion home dir, docs DB, template IDs | skips all |
+| 2 — field collection | asks Jira/Linear team, Notion home dir, docs DB, template IDs | skips all |
 | 3 — create Notion docs database | runs | skipped |
 | 4 — `.claude/CLAUDE.md` | runs | runs |
-| 5 — verify Notion / Linear / Figma | runs; blocks on failure | skipped; summary reads "not required in local mode" |
+| 5 — verify Notion / Jira/Linear / Figma | runs; blocks on failure | skipped; summary reads "not required in local mode" |
 | 6 — Snyk | runs | runs (local binary, unaffected) |
 | new — scaffold `.sdlc/` | — | create `.sdlc/features/` and `.sdlc/README.md` |
 | 8 — summary | shows MCP status table | shows mode and `.sdlc/` path |
 
-**Auto-default on unreachable tools.** When init cannot reach Notion or Linear,
+**Auto-default on unreachable tools.** When init cannot reach Notion or Jira/Linear,
 it offers local mode as the recommended option rather than returning a
 half-configured workspace, and states plainly that artifacts will live in
-`.sdlc/` as markdown and that re-running the skill switches to Notion/Linear
+`.sdlc/` as markdown and that re-running the skill switches to Notion/Jira/Linear
 later.
 
 **Switching modes is a re-run of `workspace-init` and moves nothing.** Given
@@ -248,7 +248,7 @@ Six skills touch artifacts and each gains the same step 0:
 > `.claude/settings.local.json` (absent = `remote`). Read
 > `${CLAUDE_PLUGIN_ROOT}/references/artifact-store.md` and use the
 > implementation for that mode for every artifact operation named below. Never
-> call Notion or Linear directly.
+> call Notion or Jira/Linear directly.
 
 Each skill body then replaces tool-specific prose with operation names — "create
 the Notion page" becomes `write_doc(feature, jotdown)`.
@@ -275,12 +275,12 @@ Markdown is as scannable as a Notion page.
 - `generate-task-breakdown` steps 2–3 — the project picker and milestone
   mapping are skipped in `local`; `select_grouping` supplies the milestone
   field.
-- `implement-task` step 15 — "Update the Linear issue status to In Review"
+- `implement-task` step 15 — "Update the Jira/Linear issue status to In Review"
   becomes `update_task_status(ref, in_review)`.
 
 ### Agent changes
 
-- `coding-agent.md` — the inputs list says "Linear issue"; becomes "task".
+- `coding-agent.md` — the inputs list says "Jira/Linear issue"; becomes "task".
 - `test-agent.md`, `security-agent.md`, `documentator-agent.md` — unchanged.
   They receive code and file lists, never artifacts.
 - `skill-retrospective.md` — unchanged.
@@ -309,7 +309,7 @@ The honest plan is three checks, none of which is a test suite:
    prd → scoping → jotdown → breakdown → implement against a trivial repo,
    confirming each artifact lands at its expected path and each gate fires.
    Written down as a checklist file so it is repeatable.
-2. **Mechanical grep**: no skill references Notion or Linear outside a mode
+2. **Mechanical grep**: no skill references Notion or Jira/Linear outside a mode
    branch or the contract file.
 3. **Diff review**: the `remote` path's steps are textually unchanged, so
    existing workspaces provably keep their behavior.
@@ -319,7 +319,7 @@ The first real local run is where this design gets its actual verdict.
 ## Deferred
 
 - Per-run `--local` override
-- Promotion of local artifacts to Notion/Linear
+- Promotion of local artifacts to Notion/Jira/Linear
 - A `converge`-style command that reconciles `.sdlc/` against the codebase
 - Local mode for `sdlc-init-claude-context` and `sdlc-workspace-sync` — neither
   produces feature artifacts, so neither is affected

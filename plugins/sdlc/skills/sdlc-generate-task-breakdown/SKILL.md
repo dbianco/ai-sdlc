@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Generate a sequenced task breakdown with PERT estimates from a Jot Down
 Implementation Spec, enriched by the Scoping Doc and Data UI Inventory. In
-`remote` mode the tasks are created as Linear issues; in `local` mode they are
+`remote` mode the tasks are created as Jira/Linear issues; in `local` mode they are
 written as task files under the feature's `tasks/` directory.
 
 ## Input
@@ -23,10 +23,10 @@ Jot Down. In `local` mode, a feature reference — `001`, `order-export`, or
    `.claude/settings.local.json` (absent means `remote`). Read
    `${CLAUDE_PLUGIN_ROOT}/references/artifact-store.md` and use the
    implementation for that mode for every artifact operation named below.
-   Never call Notion or Linear directly.
+   Never call Notion or Jira/Linear directly.
 
 1. **Load `.claude/settings.local.json`** from the project root. Read the `sdlc` config key,
-   including the repository list, the Linear team name (`remote` mode only),
+   including the repository list, the Jira/Linear team name (`remote` mode only),
    and safety boundaries (`max_files_per_pr`,
    `max_lines_per_pr`). These limits constrain the maximum size of any single
    task — defaults are 20 files and 500 lines if not configured.
@@ -59,14 +59,14 @@ Jot Down. In `local` mode, a feature reference — `001`, `order-export`, or
 3. **Establish task grouping.** Call `select_grouping()`. This runs after the
    documents are read because that is where the milestone names come from.
 
-   In `remote` mode this lists Linear projects via
+   In `remote` mode this lists Jira/Linear projects via
    `mcp__claude_ai_Linear__list_projects` and requires the user to pick one via
    `AskUserQuestion`, then lists milestones for that project via
    `mcp__claude_ai_Linear__list_milestones` and maps or creates them:
 
    - If the Jot Down covers a specific milestone from the Scoping Doc, ask the
-     user which Linear milestone to assign issues to.
-   - If the Linear project has no milestones yet, create them from the Scoping
+     user which Jira/Linear milestone to assign issues to.
+   - If the Jira/Linear project has no milestones yet, create them from the Scoping
      Doc milestones using `mcp__claude_ai_Linear__save_milestone`. Ask the user
      to confirm before creating.
 
@@ -113,7 +113,7 @@ Jot Down. In `local` mode, a feature reference — `001`, `order-export`, or
      completed before a task breakdown can be generated. Please resolve them
      and re-run this skill." Name the file path in `local` mode, or the Notion
      page in `remote` mode.
-   - **STOP. Do NOT proceed.** Do not create any tasks — no Linear issues in
+   - **STOP. Do NOT proceed.** Do not create any tasks — no Jira/Linear issues in
      `remote` mode, no task files in `local` mode.
 
    **If only non-blocking items exist:**
@@ -150,7 +150,7 @@ Jot Down. In `local` mode, a feature reference — `001`, `order-export`, or
      reference the component name, parent, and library components.
    - **Implements**: The upstream requirement IDs this task satisfies —
      `REQ-xx`, `US-xx`, and `V-xx` from the PRD. Write them as a literal
-     line in the task description — the Linear issue body in `remote` mode,
+     line in the task description — the Jira/Linear issue body in `remote` mode,
      the task file body in `local` mode:
 
      ```
@@ -184,7 +184,7 @@ Jot Down. In `local` mode, a feature reference — `001`, `order-export`, or
    - **Labels**: `ai-sdlc`, plus language label (e.g. `golang`, `typescript`).
    - **Milestone**: Which milestone this task belongs to (from the task
      grouping step) — a
-     Linear milestone in `remote` mode, the `milestone:` front-matter value in
+     Jira/Linear milestone in `remote` mode, the `milestone:` front-matter value in
      `local` mode.
 
 6a. **Verify every task's references are satisfiable.** Before sequencing,
@@ -290,9 +290,9 @@ Jot Down. In `local` mode, a feature reference — `001`, `order-export`, or
      following the order fixed by the sequencing step. The whole table is
      therefore known before a single file is written, which is what lets the
      epic carry it.
-   - In `remote` mode Linear assigns the identifier (e.g. `YAL-124`) only when
+   - In `remote` mode Jira/Linear assigns the identifier (e.g. `YAL-124`) only when
      the issue is created, so **Covered by** is completed in the task-creation
-     step below. The Linear epic carries links to the source documents, not
+     step below. The Jira/Linear epic carries links to the source documents, not
      this table — unchanged from before.
 
    Follow the table with two explicit counts: **requirements with no task**
@@ -303,7 +303,7 @@ Jot Down. In `local` mode, a feature reference — `001`, `order-export`, or
 
 9. **Create the epic.** Call `create_epic(feature)`.
 
-   In `remote` mode this creates the parent Linear issue titled
+   In `remote` mode this creates the parent Jira/Linear issue titled
    `[Feature Name] — Implementation`, labelled `ai-sdlc` and `epic`, in the
    configured team and in the selected project and milestone, with links to
    all source documents.
@@ -315,9 +315,9 @@ Jot Down. In `local` mode, a feature reference — `001`, `order-export`, or
 
 10. **Create each task.** Call `create_task(feature, task)` per task.
 
-    In `remote` mode this creates a Linear sub-issue under the parent created
+    In `remote` mode this creates a Jira/Linear sub-issue under the parent created
     in the epic step, carrying `project` and `milestone`, with dependencies set
-    from the sequencing. Once Linear has assigned the issue identifiers, use
+    from the sequencing. Once Jira/Linear has assigned the issue identifiers, use
     them to complete the **Covered by** column of the coverage table.
 
     In `local` mode it writes `tasks/<NNN>-<slug>.md` using the task file format
@@ -334,7 +334,7 @@ Jot Down. In `local` mode, a feature reference — `001`, `order-export`, or
 11. **Report to the user:**
     - Total number of tasks created, grouped by milestone
     - Critical path and estimated timeline (using PERT expected values)
-    - The artifact reference for the epic — the parent Linear issue URL in
+    - The artifact reference for the epic — the parent Jira/Linear issue URL in
       `remote` mode, the path to `tasks/README.md` in `local` mode
     - Any tasks where you were uncertain about scope or estimates
     - **Requirement coverage table** — the table built in the coverage step,

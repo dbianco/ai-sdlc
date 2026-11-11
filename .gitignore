@@ -1,6 +1,12 @@
 # OS files
 .DS_Store
 
+# Editor / IDE config (keep local, don't publish)
+.vscode/
+
+# Internal deployment manifests (not part of the public plugin)
+_deployment-manifests/
+
 # Metrics data (safety net — actual data lives at ~/.claude/metrics/)
 *.jsonl
 

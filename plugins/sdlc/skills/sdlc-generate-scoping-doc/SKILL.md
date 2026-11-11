@@ -21,7 +21,7 @@ PRD. In `local` mode, a feature reference — `001`, `order-export`, or
    `.claude/settings.local.json` (absent means `remote`). Read
    `${CLAUDE_PLUGIN_ROOT}/references/artifact-store.md` and use the
    implementation for that mode for every artifact operation named below.
-   Never call Notion or Linear directly.
+   Never call Notion or Jira/Linear directly.
 
 1. **Load `.claude/settings.local.json`** from the project root. Read the `sdlc` config key,
    including Notion config (`docs_database`) and the list of allowed repositories.

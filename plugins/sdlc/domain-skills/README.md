@@ -2,7 +2,7 @@
 
 These files are **not slash commands**. They are markdown knowledge documents
 injected into the Coding Agent's Task prompt by `/sdlc-implement-task` when a
-matching tech domain is detected from the Linear issue.
+matching tech domain is detected from the Jira/Linear issue.
 
 They are read from `${CLAUDE_PLUGIN_ROOT}/domain-skills/` — they ship with the
 plugin and require no per-workspace setup.
@@ -12,7 +12,7 @@ plugin and require no per-workspace setup.
 `sdlc-implement-task` builds a `domain_skills` list using three signal sources, in
 priority order:
 
-1. **Linear labels** (highest confidence) — explicit labels set by the team
+1. **Jira/Linear labels** (highest confidence) — explicit labels set by the team
 2. **CLAUDE.md `## Tech Stack` section** — `Language:` / `Framework:` fields
 3. **Issue title + description keywords** (fallback) — keyword scan
 
@@ -22,7 +22,7 @@ runs with CLAUDE.md context only.
 
 ## Label / Keyword → File Mapping
 
-| Linear Label                       | CLAUDE.md Keyword                                  | Issue Keywords                     | Domain File           |
+| Jira/Linear Label                       | CLAUDE.md Keyword                                  | Issue Keywords                     | Domain File           |
 | ---------------------------------- | -------------------------------------------------- | ---------------------------------- | --------------------- |
 | `golang`, `go`, `go-service`       | `Language: Go`                                     | `goroutine`, `gRPC`, `golang`      | `golang.md`           |
 | `frontend`, `react`, `web-app`     | `Language: TypeScript` + `Framework: React`        | `component`, `suspense`, `MUI`     | `frontend-react.md`   |

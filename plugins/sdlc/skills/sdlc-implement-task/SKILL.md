@@ -9,12 +9,12 @@ disable-model-invocation: true
 Implement a task by orchestrating the Coding Agent, Test Agent, Security
 Agent (optional — the user is asked each run), and Documentator Agent. This
 is the entry point for the autonomous coding loop. In `remote` mode the task
-is a Linear issue; in `local` mode it is a task file under a feature's
+is a Jira/Linear issue; in `local` mode it is a task file under a feature's
 `tasks/` directory.
 
 ## Input
 
-$ARGUMENTS — In `remote` mode, one or more Linear issue identifiers
+$ARGUMENTS — In `remote` mode, one or more Jira/Linear issue identifiers
 (e.g. `YAL-123` or `YAL-123, YAL-124`). In `local` mode, one or more task
 ids (e.g. `001-002` or `001-002, 001-003`) or paths to task files. The user
 may also write sequencing hints like `001-002 and 001-003 on top of 001-001`;
@@ -35,7 +35,7 @@ every task.
    `.claude/settings.local.json` (absent means `remote`). Read
    `${CLAUDE_PLUGIN_ROOT}/references/artifact-store.md` and use the
    implementation for that mode for every artifact operation named below.
-   Never call Notion or Linear directly.
+   Never call Notion or Jira/Linear directly.
 
 1. **Load `.claude/settings.local.json`** from the project root. Read the `sdlc` config key,
    including safety boundaries.
@@ -58,7 +58,7 @@ every task.
      the user **where** the task lives (branch name, PR number, SHA).
      Ask whether to check that revision out first and retry.
 
-   For `remote` mode, skip this step — Linear is always "current" and the
+   For `remote` mode, skip this step — Jira/Linear is always "current" and the
    task-store concept does not apply.
 
 2. **Read the task.** Let `ref` be the current task id from $ARGUMENTS
@@ -81,7 +81,7 @@ every task.
    - Parent context — the parent issue in `remote` mode, `tasks/README.md` in
      `local` mode
    - Sibling tasks and their status — the issue's sub-issues in `remote` mode
-     (via the Linear MCP), or `list_tasks(feature)` in `local` mode (every
+     (via the Jira/Linear MCP), or `list_tasks(feature)` in `local` mode (every
      other task file in the feature's `tasks/` directory)
    - Dependencies (ensure they are completed — abort if not). In `local` mode
      these are the `depends_on:` ids; a dependency is complete when its
@@ -223,7 +223,7 @@ every task.
    diverging from `main`. Say which base was used in the final report so
    the reviewer knows the stacking order.
 
-   `<task-id>` is the Linear issue id (`yal-123`) in `remote` mode, or the
+   `<task-id>` is the Jira/Linear issue id (`yal-123`) in `remote` mode, or the
    composite task id (`001-002`) in `local` mode — producing branches like
    `ai/001-002-add-csv-export-endpoint`.
 
@@ -451,7 +451,7 @@ every task.
       - "Accept risk and continue" — proceed with a documented security
         exception noted in the commit message.
       - "Abort" — stop and mark the task Blocked, noting the unresolved
-        findings. In `remote` mode, update the Linear issue to "Blocked" with
+        findings. In `remote` mode, update the Jira/Linear issue to "Blocked" with
         a comment. In `local` mode, call `update_task_status(ref, blocked,
         reason)` with the unresolved findings as `reason` — this writes both
         `status: blocked` and `blocked_reason:`, so the cause survives in the
@@ -509,7 +509,7 @@ every task.
 
     Security: <PASS|PASS-WITH-FP|FAIL|SKIPPED> — <N findings remediated, M FPs documented, 'unresolved findings — see report', 'scan declined by user', 'Snyk not configured', or 'acceptance-run task, no source changes'>"
     ```
-    `<task-id>` is the Linear issue id in `remote` mode, or the composite task
+    `<task-id>` is the Jira/Linear issue id in `remote` mode, or the composite task
     id in `local` mode.
 
     Follow the repo's commit convention from CLAUDE.md if one exists.
@@ -584,7 +584,7 @@ every task.
       `unmet` is the list of criterion IDs the run could not measure.
     - **FAIL** or **BLOCKED** → `update_task_status(ref, blocked, reason)`.
 
-    In `remote` mode this sets the Linear issue status (and attaches the
+    In `remote` mode this sets the Jira/Linear issue status (and attaches the
     reason as a comment when non-empty). In `local` mode it rewrites the
     `status:` front-matter field in place and, when applicable, writes
     `unmet:` or `blocked_reason:` as the artifact-store contract defines,
@@ -610,7 +610,7 @@ every task.
     - Do not push — the task-store repo's push/PR flow is the user's.
       Record the commit SHA in the final report so it is traceable.
 
-    For `remote` mode, Linear persists the status itself; nothing to
+    For `remote` mode, Jira/Linear persists the status itself; nothing to
     commit.
 
 ---
@@ -623,7 +623,7 @@ every task.
 
     Pass to the agent:
     - **Skill name**: `sdlc-implement-task`
-    - **What was built**: the task id (Linear issue id in `remote` mode,
+    - **What was built**: the task id (Jira/Linear issue id in `remote` mode,
       composite task id in `local` mode), title, and branch name
     - **Run summary**: pass the step-14 report **verbatim**, not a
       paraphrase. Step 14 already covers both `kind: code` (iteration
@@ -660,7 +660,7 @@ every task.
 - Each sub-agent runs in a sandboxed Task. The orchestrator passes context
   in and reads results out.
 - If any step fails unrecoverably, mark the task Blocked and report to the
-  user. In `remote` mode, update the Linear issue with a comment explaining
+  user. In `remote` mode, update the Jira/Linear issue with a comment explaining
   what happened and set status to "Blocked". In `local` mode, call
   `update_task_status(ref, blocked, reason)` with a short explanation as
   `reason` — this writes both `status: blocked` and `blocked_reason:` so the

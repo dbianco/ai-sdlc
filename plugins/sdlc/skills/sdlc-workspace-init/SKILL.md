@@ -8,7 +8,7 @@ description: Interactive setup wizard that configures .claude/settings.local.jso
 Interactive setup wizard for configuring your workspace. Walks through
 `.claude/settings.local.json` to fill in missing values under the `sdlc` key,
 ensures `.claude/CLAUDE.md` exists with a Lessons Learned section,
-verifies MCP connectivity (Linear, Notion, Figma, Playwright), and reports a
+verifies MCP connectivity (Jira/Linear, Notion, Figma, Playwright), and reports a
 summary of your workspace status.
 
 This skill is **idempotent** — run it as many times as you want. It only asks
@@ -21,7 +21,7 @@ $ARGUMENTS — Optional mode flag:
 
 - No arguments — run the guided wizard normally (default)
 - `--switch-mode` — re-open the artifact store choice (Phase 0) even though
-  `sdlc.mode` is already set, to deliberately move between Notion + Linear
+  `sdlc.mode` is already set, to deliberately move between Notion + Jira/Linear
   and local files
 
 ## Procedure
@@ -82,11 +82,11 @@ $ARGUMENTS — Optional mode flag:
         `sdlc.notion.home_directory` both already hold real, non-placeholder
         values** (same placeholder rules as Phase 1.2) — this workspace was
         configured before modes existed and is already running against Notion
-        and Linear. Its mode is not an open question. Persist
+        and Jira/Linear. Its mode is not an open question. Persist
         `"mode": "remote"` to `.claude/settings.local.json` (read-modify-write,
-        per Phase 2.3), tell the user only that the existing Notion + Linear
+        per Phase 2.3), tell the user only that the existing Notion + Jira/Linear
         setup was kept, and **skip the rest of this phase**. Ask nothing.
-        Probe nothing — a transient Notion or Linear auth failure must never
+        Probe nothing — a transient Notion or Jira/Linear auth failure must never
         turn into a recommendation to abandon a working remote workspace.
 
         The one exception: if `--switch-mode` was passed, still persist
@@ -95,7 +95,7 @@ $ARGUMENTS — Optional mode flag:
         compares against that value.
 
      c. **`sdlc.mode` is absent and the workspace is not already configured
-        for Notion + Linear** (either of those two values missing or still a
+        for Notion + Jira/Linear** (either of those two values missing or still a
         placeholder) — the genuine first run. Proceed with this phase
         regardless of how the skill was invoked. `--switch-mode` is redundant
         here and changes nothing: there is no previous mode to switch away
@@ -111,8 +111,8 @@ $ARGUMENTS — Optional mode flag:
      "Where should this workspace keep its PRDs, Scoping Docs, Jot Downs, and
      tasks?"
 
-     - **Notion + Linear** — documents become Notion pages and tasks become
-       Linear issues. Requires a Notion workspace and a Linear team.
+     - **Notion + Jira/Linear** — documents become Notion pages and tasks become
+       Jira/Linear issues. Requires a Notion workspace and a Jira/Linear team.
      - **Local files** — everything is markdown under `.sdlc/` in this
        workspace. No external accounts, no setup. You can switch later by
        running `/sdlc:sdlc-workspace-init --switch-mode`.
@@ -136,16 +136,16 @@ $ARGUMENTS — Optional mode flag:
        first-run case): do NOT probe anything — nothing is configured yet,
        so a reachability check would tell you nothing. Present the two
        options neutrally: "Nothing is configured yet. Local files work
-       immediately with no accounts; Notion + Linear needs a Notion
-       workspace and a Linear team you can point me at."
+       immediately with no accounts; Notion + Jira/Linear needs a Notion
+       workspace and a Jira/Linear team you can point me at."
 
      - **Only if both `linear.team` and `notion.home_directory` already
        hold real values** — which, given Phase 0.1 case (b), means the user
        explicitly asked to reconsider with `--switch-mode` — attempt the
-       Linear and Notion checks described
+       Jira/Linear and Notion checks described
        in Phase 5. If either fails, present **Local files** as the
        recommended option and say precisely which one failed — e.g.
-       "Linear is configured but not reachable from this session," or
+       "Jira/Linear is configured but not reachable from this session," or
        "Notion is configured but not reachable from this session." Never
        state or imply that a tool is unreachable when the true condition is
        that it is unconfigured.
@@ -157,9 +157,9 @@ $ARGUMENTS — Optional mode flag:
      move:
 
      - **`local` → `remote`:** "Your existing `.sdlc/` artifacts stay on disk.
-       They are not copied to Notion or Linear — there is no migration. New
+       They are not copied to Notion or Jira/Linear — there is no migration. New
        documents will be created in Notion from now on."
-     - **`remote` → `local`:** "Your existing Notion pages and Linear issues
+     - **`remote` → `local`:** "Your existing Notion pages and Jira/Linear issues
        stay where they are. They are not copied into `.sdlc/` — there is no
        migration. New documents will be written to `.sdlc/` from now on."
 
@@ -267,7 +267,7 @@ $ARGUMENTS — Optional mode flag:
 
 2.2. **For each field that needs setup, ask the user:**
 
-   **In `local` mode, skip the Linear team, Notion home directory, Notion docs
+   **In `local` mode, skip the Jira/Linear team, Notion home directory, Notion docs
    database, and all four template ID fields.** None of them apply — local mode
    uses each skill's inline document structure. Still collect the workspace name
    and the repository list.
@@ -278,8 +278,8 @@ $ARGUMENTS — Optional mode flag:
    different name?"
    If accepted, set `sdlc.workspace.name` to the directory name.
 
-   **Linear team** (only if placeholder):
-   "What is your Linear team name? This is the team where your issues live
+   **Jira/Linear team** (only if placeholder):
+   "What is your Jira/Linear team name? This is the team where your issues live
    (e.g. 'Platform', 'Commerce', 'Growth'). Ask your Engineering Manager if
    you are unsure."
 
@@ -479,20 +479,20 @@ database to create.
 ### Phase 5 — Verify MCP Status (Always Runs)
 
 Skip this phase entirely when `sdlc.mode` is `local`. Report "not required in
-local mode" for Notion, Linear, and Figma in the Phase 8 summary instead.
+local mode" for Notion, Jira/Linear, and Figma in the Phase 8 summary instead.
 Snyk and Playwright are unaffected — they are local tools and Phase 6 still runs.
 
 5.1. **Tell the user what is about to happen:**
    "I'll now check MCP connectivity. If a service is not yet authenticated,
    your browser may open for sign-in — this is normal and expected."
 
-5.2. **Check Linear.** Attempt to call the Linear `list_teams` tool (limit 5).
+5.2. **Check Jira/Linear.** Attempt to call the Jira/Linear `list_teams` tool (limit 5).
    - **If successful:** Record status as "Connected". Show the teams found.
      If the configured `linear.team` value appears in the results, note:
-     "Your team '<name>' was found in Linear." If it does NOT appear, warn:
+     "Your team '<name>' was found in Jira/Linear." If it does NOT appear, warn:
      "Your team '<name>' was not found. Available teams: [list]."
    - **If it fails:** Record status as "Not connected". Do NOT retry or
-     block. Note: "Linear will prompt for sign-in the first time you use a
+     block. Note: "Jira/Linear will prompt for sign-in the first time you use a
      skill that needs it (`/sdlc:sdlc-generate-task-breakdown`,
      `/sdlc:sdlc-implement-task`)."
 
@@ -770,7 +770,7 @@ Snyk and Playwright are unaffected — they are local tools and Phase 6 still ru
 
       This workspace runs the `sdlc` plugin in local mode. Every PRD, Scoping
       Doc, Jot Down, Data UI Inventory, and task lives here as markdown instead
-      of in Notion and Linear.
+      of in Notion and Jira/Linear.
 
       ```
       features/
@@ -785,7 +785,7 @@ Snyk and Playwright are unaffected — they are local tools and Phase 6 still ru
 
       These files are the specification — commit them.
 
-      To switch to Notion and Linear, run `/sdlc:sdlc-workspace-init --switch-mode`.
+      To switch to Notion and Jira/Linear, run `/sdlc:sdlc-workspace-init --switch-mode`.
       Existing files stay on disk; they are not migrated.
       ````
 
@@ -800,9 +800,9 @@ Snyk and Playwright are unaffected — they are local tools and Phase 6 still ru
     Workspace Configuration (.claude/settings.local.json)
     ─────────────────────────────────────────
     Default model:     <model value>
-    Artifact store:    <"Local files (.sdlc/)" or "Notion + Linear">
+    Artifact store:    <"Local files (.sdlc/)" or "Notion + Jira/Linear">
     Workspace name:    <value>
-    Linear team:       <value>
+    Jira/Linear team:       <value>
     Notion home page:  <value>
     Docs database:     <ID or "Not created yet">
     Repositories:      <repo1>, <repo2>, ...
@@ -823,7 +823,7 @@ Snyk and Playwright are unaffected — they are local tools and Phase 6 still ru
     ─────────────────────────────────────────────────────────────────
     Integration  Status                    Skills that need it
     ─────────────────────────────────────────────────────────────────
-    Linear       <status>                  /sdlc-generate-task-breakdown,
+    Jira/Linear       <status>                  /sdlc-generate-task-breakdown,
                                            /sdlc-implement-task
     Notion       <status>                  /sdlc-generate-prd,
                                            /sdlc-generate-scoping-doc,
@@ -907,7 +907,7 @@ Snyk and Playwright are unaffected — they are local tools and Phase 6 still ru
   it is given, and no later phase may write a different `sdlc.mode`.
   Phase 1.1's `"mode": "remote"` default applies only when no mode exists
   anywhere — neither in Phase 0's answer nor already on disk.
-- A workspace that predates `sdlc.mode` but already holds a real Linear team
+- A workspace that predates `sdlc.mode` but already holds a real Jira/Linear team
   and Notion home directory **is** `remote` by definition. Record that and
   move on. Never re-interview it and never probe its integrations during
   Phase 0 — existing workspaces must behave exactly as they did before modes
@@ -948,11 +948,11 @@ Snyk and Playwright are unaffected — they are local tools and Phase 6 still ru
 - Keep language clear and non-technical. This is the first skill most users
   will encounter. Say "your browser will open for sign-in" rather than
   "the OAuth flow will initiate."
-- If the user seems confused about where to find their Linear team name or
+- If the user seems confused about where to find their Jira/Linear team name or
   Notion page URL, suggest they ask their Engineering Manager or PM.
 - MCP checks should not block the wizard. If a check fails, report it and
   move on. The user can authenticate later.
-- Notion, Linear, and Figma are Claude built-in integrations — there is no
+- Notion, Jira/Linear, and Figma are Claude built-in integrations — there is no
   local MCP server configuration needed for them. Only Playwright requires
   a local MCP entry (already bundled in the plugin's `.mcp.json`).
 - Snyk MCP is written to `~/.claude.json` (global user config), NOT to a

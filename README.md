@@ -1,4 +1,4 @@
-# TextraAI AI SDLC Plugin
+# AI SDLC Plugin
 
 An agentic AI-powered Software Development Lifecycle (SDLC) plugin for
 [Claude Code](https://claude.com/claude-code). It transforms product ideas into
@@ -64,7 +64,7 @@ Two skills integrate [`alfonsograziano/needs-human-review`](https://github.com/a
 ### Marketplace manifest
 
 `.claude-plugin/marketplace.json` at the repo root defines the marketplace
-name (`TextraAI-sdlc`) and lists available plugins. This is what Claude Code reads
+name (`ai-sdlc`) and lists available plugins. This is what Claude Code reads
 when a user runs `/plugin marketplace add`.
 
 ### Plugin manifest
@@ -89,7 +89,7 @@ claude
 /plugin marketplace add /path/to/ai-sdlc
 
 # Install the plugin
-/plugin install sdlc@TextraAI-sdlc
+/plugin install sdlc@ai-sdlc
 ```
 
 After making changes to skill/agent files, uninstall and reinstall to pick
@@ -97,7 +97,7 @@ them up:
 
 ```
 /plugin uninstall sdlc
-/plugin install sdlc@TextraAI-sdlc
+/plugin install sdlc@ai-sdlc
 ```
 
 ### Managing the plugin
@@ -106,7 +106,7 @@ them up:
 /plugin list                        # List installed plugins
 /plugin marketplace list            # List registered marketplaces
 /plugin uninstall sdlc              # Uninstall the plugin
-/plugin marketplace remove TextraAI-sdlc  # Remove the marketplace
+/plugin marketplace remove ai-sdlc  # Remove the marketplace
 ```
 
 ### Writing Skills
@@ -243,16 +243,16 @@ repository's `.claude/settings.json`:
 ```json
 {
   "extraKnownMarketplaces": {
-    "TextraAI-sdlc": {
+    "ai-sdlc": {
       "source": {
         "source": "github",
-        "repo": "TextraAI/ai-sdlc",
+        "repo": "dbianco/ai-sdlc",
         "ref": "main"
       }
     }
   },
   "enabledPlugins": {
-    "sdlc@TextraAI-sdlc": true
+    "sdlc@ai-sdlc": true
   }
 }
 ```
@@ -273,7 +273,7 @@ install, administrators can restrict marketplace sources using
   "strictKnownMarketplaces": [
     {
       "source": "github",
-      "repo": "TextraAI/ai-sdlc",
+      "repo": "dbianco/ai-sdlc",
       "ref": "main"
     }
   ]
@@ -288,10 +288,10 @@ branch. This prevents automatic updates until you explicitly bump the SHA:
 ```json
 {
   "extraKnownMarketplaces": {
-    "TextraAI-sdlc": {
+    "ai-sdlc": {
       "source": {
         "source": "github",
-        "repo": "TextraAI/ai-sdlc",
+        "repo": "dbianco/ai-sdlc",
         "ref": "main",
         "sha": "<full-40-char-commit-sha>"
       }
@@ -320,6 +320,19 @@ Teams progress through three stages per-service:
 | **2 -- Collaborator** | Generates first drafts | Reviews and approves | 90%+ CI pass rate, 80%+ test coverage |
 | **3 -- Autonomous** | Handles routine work E2E | Exceptions and strategy | 98% PR approval without modification, 90%+ coverage |
 
+## Acknowledgments
+
+This plugin is grounded in our own experience bringing AI into every stage of
+day-to-day software delivery, and builds on ideas from prior art in the
+community. Notable inspirations include:
+
+- [kulichevskiy/sdlc](https://github.com/kulichevskiy/sdlc) — a lightweight,
+  slash-command-driven SDLC flow for Claude Code.
+- GitHub's SDLC references and community plugins that explore agentic
+  software-delivery pipelines.
+
+Thanks to the authors of those projects for the ideas we built on.
+
 ## License
 
-Internal use only. See your organization's policies for details.
+Released under the [MIT License](LICENSE).

@@ -17,7 +17,7 @@ not behavior.
 
 - [ ] **Init.** Run `/sdlc-workspace-init`. Phase 0 asks where artifacts should
       live. Choose **Local files**.
-- [ ] It does **not** ask for a Linear team, a Notion home directory, a docs
+- [ ] It does **not** ask for a Jira/Linear team, a Notion home directory, a docs
       database, or any template ID.
 - [ ] `.sdlc/features/` and `.sdlc/README.md` exist. `.gitignore` does **not**
       mention `.sdlc`.
@@ -56,9 +56,9 @@ final check puts it back.
       artifact stores later" line.
 - [ ] **The flag reopens the choice.** Run
       `/sdlc-workspace-init --switch-mode`. Phase 0 asks again. Choose
-      **Notion + Linear**.
+      **Notion + Jira/Linear**.
 - [ ] It states that nothing is migrated — existing `.sdlc/` files stay on
-      disk and are not copied to Notion or Linear.
+      disk and are not copied to Notion or Jira/Linear.
 - [ ] `.claude/settings.local.json` now contains `"mode": "remote"`, and
       `.sdlc/features/001-<slug>/` still holds every file created above,
       unchanged.

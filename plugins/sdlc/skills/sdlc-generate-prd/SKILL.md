@@ -9,7 +9,7 @@ disable-model-invocation: true
 Generate a Product Requirements Document from a feature description. In
 `remote` mode it is created as a Notion page under the workspace's configured
 home directory; in `local` mode it is written to `.sdlc/features/`. The PRD
-follows TextraAI's standard 11-section template with numbered IDs for
+follows the standard 11-section template with numbered IDs for
 cross-referencing in engineering workflows.
 
 ## Input
@@ -23,7 +23,7 @@ Can be a few sentences or a detailed brief.
    `.claude/settings.local.json` (absent means `remote`). Read
    `${CLAUDE_PLUGIN_ROOT}/references/artifact-store.md` and use the
    implementation for that mode for every artifact operation named below.
-   Never call Notion or Linear directly.
+   Never call Notion or Jira/Linear directly.
 
 1. **Load `.claude/settings.local.json`** from the project root. Read the `sdlc` config key,
    including Notion `home_directory`, `docs_database`, and `templates.prd` values.
@@ -275,7 +275,7 @@ Can be a few sentences or a detailed brief.
 
    In `remote` mode `new_feature` creates nothing by itself — it only binds the
    feature name that titles the page `write_doc` then creates. This skill does
-   not touch Linear at all: no project, no issue. Linear enters the pipeline
+   not touch Jira/Linear at all: no project, no issue. Jira/Linear enters the pipeline
    only at `/sdlc-generate-task-breakdown`.
 
    In `remote` mode this creates the Notion page titled `PRD: <Feature Name>`

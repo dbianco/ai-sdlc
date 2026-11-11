@@ -1,6 +1,6 @@
 ---
 name: sdlc-generate-jotdown
-description: Generate a Jot Down Implementation Spec from any source — Scoping Doc, Linear issue, Slack thread, Notion page, or direct input
+description: Generate a Jot Down Implementation Spec from any source — Scoping Doc, Jira/Linear issue, Slack thread, Notion page, or direct input
 disable-model-invocation: true
 ---
 
@@ -12,7 +12,7 @@ detailed technical blueprint that coding agents will use.
 ## Input
 
 $ARGUMENTS — (optional) The primary source. In `remote` mode: a Scoping Doc
-Notion URL, a Linear issue (URL or `XXX-NNN`), a Slack thread URL, a Notion page
+Notion URL, a Jira/Linear issue (URL or `XXX-NNN`), a Slack thread URL, a Notion page
 URL, or free text. In `local` mode: a feature reference (`001`, `order-export`,
 `001-order-export`), or free text — free text allocates a new feature directory
 to hold the Jot Down, so local mode never requires a PRD or Scoping Doc to have
@@ -26,7 +26,7 @@ been generated first. If omitted, the skill will ask.
    `.claude/settings.local.json` (absent means `remote`). Read
    `${CLAUDE_PLUGIN_ROOT}/references/artifact-store.md` and use the
    implementation for that mode for every artifact operation named below.
-   Never call Notion or Linear directly.
+   Never call Notion or Jira/Linear directly.
 
 1. **Load `.claude/settings.local.json`** from the project root. Read the `sdlc`
    config key, including Notion config, `docs_database`, and `templates.jotdown`.
@@ -68,7 +68,7 @@ been generated first. If omitted, the skill will ask.
    | Pattern | Source type | How to fetch |
    |---------|------------|-------------|
    | URL containing `notion.so` or `notion.site` | Notion page | `notion-fetch` |
-   | URL containing `linear.app` or pattern `XXX-NNN` | Linear issue | `get_issue` |
+   | URL containing `linear.app` or pattern `XXX-NNN` | Jira/Linear issue | `get_issue` |
    | URL containing `slack.com` | Slack thread | `slack_read_thread` |
    | A feature ref in `local` mode (`001`, `order-export`, `001-order-export`) | Local feature | `resolve_feature`, then `read_doc` for each kind present |
    | Other non-empty text | Free text | Use directly |
@@ -651,7 +651,7 @@ been generated first. If omitted, the skill will ask.
     - **Skill name**: `sdlc-generate-jotdown`
     - **What was built**: the Jot Down title(s) and artifact reference(s) —
       Notion URL(s) in `remote` mode, file path in `local` mode
-    - **Run summary**: source type used (Scoping Doc, Linear, Slack, free text),
+    - **Run summary**: source type used (Scoping Doc, Jira/Linear, Slack, free text),
       key architectural decisions made, gaps that required user input, sections
       that needed iteration, any user corrections or pushback during the run
     - **Workspace config**: the repository list from `.claude/settings.local.json`
@@ -676,7 +676,7 @@ been generated first. If omitted, the skill will ask.
 - If you cannot determine something from the codebase, mark it as
   `⚠️ NEEDS HUMAN INPUT: <what's needed>` — do not guess.
 - The Jot Down must be self-sufficient: `generate-task-breakdown` must be able
-  to create tasks from it alone — Linear issues in `remote` mode, task files in
+  to create tasks from it alone — Jira/Linear issues in `remote` mode, task files in
   `local` mode — without fetching a PRD or Scoping Doc. All milestones,
   acceptance criteria, affected services, architectural decisions, and risks
   must be embedded directly in the document.

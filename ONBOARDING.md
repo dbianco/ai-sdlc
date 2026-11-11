@@ -21,8 +21,8 @@ machine. Total time: ~15 minutes.
   - 🔍 *Check:* `ssh -T git@github.com` → should print `Hi <your-username>! You've successfully authenticated`
   - 📦 *Fix:* If it fails, add an SSH key to your GitHub account: https://docs.github.com/en/authentication/connecting-to-github-with-ssh
 
-- [ ] **Your team's Linear team name** *(remote mode only — skip if you plan to use local mode; see [Local Mode](#local-mode-no-notion-no-linear) below)* — The task breakdown skill creates issues in your team's Linear board and needs to know which team to post to.
-  - 🔍 *Check:* It's the name shown at the top of your Linear workspace (e.g. `Commerce`, `Engagement`). Ask your EM if unsure.
+- [ ] **Your team's Jira/Linear team name** *(remote mode only — skip if you plan to use local mode; see [Local Mode](#local-mode-no-notion-no-jiralinear) below)* — The task breakdown skill creates issues in your team's Jira/Linear board and needs to know which team to post to.
+  - 🔍 *Check:* It's the name shown at the top of your Jira/Linear workspace (e.g. `Commerce`, `Engagement`). Ask your EM if unsure.
   - 📦 *No install needed*
 
 - [ ] **A Notion page URL for AI-generated documents** *(remote mode only — same skip applies)* — Every pipeline output (PRDs, Scoping Docs, Jot Downs) is saved as a Notion page. This URL tells the plugin where to put them.
@@ -43,14 +43,14 @@ self-contained project directory where you run `claude` and invoke skills.
 ### Example workspaces
 
 ```
-~/code/TextraAI/workspace-commerce/        # Commerce domain
+~/code/workspace-commerce/        # Commerce domain
 ├── api-gateway/                       # API layer
 ├── commerce-service/                  # Core business logic
 ├── commerce-web/                      # Frontend
 ├── payments-service/                  # Payment processing
 └── shared-libs/                       # Shared utilities
 
-~/code/TextraAI/workspace-engagement/      # Engagement domain
+~/code/workspace-engagement/      # Engagement domain
 ├── engagement-api/
 ├── engagement-service/
 ├── campaigns-service/
@@ -69,13 +69,13 @@ Ask your tech lead or EM which repositories belong to your domain. Then:
 
 ```bash
 # Commerce domain example
-mkdir -p ~/code/TextraAI/workspace-commerce
-cd ~/code/TextraAI/workspace-commerce
-git clone git@github.com:TextraAI/api-gateway.git
-git clone git@github.com:TextraAI/commerce-service.git
-git clone git@github.com:TextraAI/commerce-web.git
-git clone git@github.com:TextraAI/payments-service.git
-git clone git@github.com:TextraAI/shared-libs.git
+mkdir -p ~/code/workspace-commerce
+cd ~/code/workspace-commerce
+git clone git@github.com:your-org/api-gateway.git
+git clone git@github.com:your-org/commerce-service.git
+git clone git@github.com:your-org/commerce-web.git
+git clone git@github.com:your-org/payments-service.git
+git clone git@github.com:your-org/shared-libs.git
 ```
 
 **Rule of thumb:** if a feature in your domain would require changes across
@@ -86,19 +86,19 @@ multiple repos, all of those repos should be in your workspace.
 Open Claude Code **from your workspace root** and register the marketplace:
 
 ```bash
-cd ~/code/TextraAI/workspace-commerce
+cd ~/code/workspace-commerce
 claude
 ```
 
 ```
-/plugin marketplace add TextraAI/ai-sdlc
+/plugin marketplace add dbianco/ai-sdlc
 ```
 
 **Exit and restart Claude Code** (`/exit`, then `claude`) so the marketplace
 is fully loaded. Then install the plugin:
 
 ```
-/plugin install sdlc@TextraAI-sdlc
+/plugin install sdlc@ai-sdlc
 ```
 
 **Exit and restart Claude Code again.** The plugin's skills, agents, hooks,
@@ -109,7 +109,7 @@ and MCP configuration will be available after this restart.
 Start Claude Code from your workspace root and run the setup wizard:
 
 ```bash
-cd ~/code/TextraAI/workspace-commerce
+cd ~/code/workspace-commerce
 claude
 ```
 
@@ -118,14 +118,14 @@ claude
 ```
 
 The wizard will:
-1. **Choose an artifact store** -- Notion + Linear (the default) or local
+1. **Choose an artifact store** -- Notion + Jira/Linear (the default) or local
    markdown files under `.sdlc/`, with no accounts required. See
-   [Local Mode](#local-mode-no-notion-no-linear) below for what this changes.
+   [Local Mode](#local-mode-no-notion-no-jiralinear) below for what this changes.
 2. **Configure `.claude/settings.local.json`** -- in remote mode, ask for your
-   Linear team name, Notion home page URL, and repository list (only asks for
+   Jira/Linear team name, Notion home page URL, and repository list (only asks for
    values that are missing). In local mode, only the repository list is
-   asked -- Linear and Notion questions are skipped entirely.
-3. **Verify MCP integrations** -- test connectivity to Linear, Notion, and
+   asked -- Jira/Linear and Notion questions are skipped entirely.
+3. **Verify MCP integrations** -- test connectivity to Jira/Linear, Notion, and
    Figma. This whole phase is skipped in local mode. If an integration is
    not yet authenticated, your browser will open for sign-in
 4. **Show a summary** -- report what is configured, what integrations are
@@ -136,10 +136,10 @@ status. It is idempotent -- it only asks about missing values and always
 reports status, and it will **not** re-ask which artifact store to use once
 that choice is made. To change it later, run
 `/sdlc-workspace-init --switch-mode` (see
-[Local Mode](#local-mode-no-notion-no-linear)).
+[Local Mode](#local-mode-no-notion-no-jiralinear)).
 
 **Repeat this step for each workspace you created.** Each workspace gets its
-own `.claude/settings.local.json` with its own mode, Linear team and Notion
+own `.claude/settings.local.json` with its own mode, Jira/Linear team and Notion
 page (if remote), and repository list.
 
 ## Step 4 -- Initialize Your Repositories
@@ -195,17 +195,17 @@ Feature Idea
 │                                                          │
 │  /sdlc-generate-jotdown ────────────► Jot Down (Notion)  │
 │       Accepts any source:        DB changes, APIs,       │
-│       Scoping Doc, Linear issue, System design,          │
+│       Scoping Doc, Jira/Linear issue, System design,          │
 │       Slack thread, Notion page, Arch decisions          │
 │       or free text                                       │
 └──────────────────────────────────────────────────────────┘
     │                                  Human reviews & resolves all TBDs
     ▼
-/sdlc-generate-task-breakdown ───────────► Linear Issues
+/sdlc-generate-task-breakdown ───────────► Jira/Linear Issues
     │                                  Parent epic + sub-issues with PERT estimates,
     │                                  dependencies, and sequencing
     ▼
-/sdlc-implement-task [LINEAR-ID] ────────► Code + Tests + Docs (GitHub branch)
+/sdlc-implement-task [JIRA/LINEAR-ID] ────────► Code + Tests + Docs (GitHub branch)
     │
     │   ┌──────────────────────────────────────────┐
     │   │  Coding Agent → writes code + tests      │
@@ -224,29 +224,29 @@ Human Review ──────────────────────�
 ```
 
 *This diagram shows the default remote-mode outputs. In local mode, every
-"Notion" and "Linear Issues" label above becomes a markdown file under
+"Notion" and "Jira/Linear Issues" label above becomes a markdown file under
 `.sdlc/features/<NNN-slug>/` instead — the flow, the skills, and the
 validation gates are otherwise identical. See
-[Local Mode](#local-mode-no-notion-no-linear) below.*
+[Local Mode](#local-mode-no-notion-no-jiralinear) below.*
 
-## Local Mode (No Notion, No Linear)
+## Local Mode (No Notion, No Jira/Linear)
 
 Everything above describes the pipeline's default: PRDs, Scoping Docs, Jot
-Downs, and tasks read and write to Notion and Linear. If you don't have
+Downs, and tasks read and write to Notion and Jira/Linear. If you don't have
 those set up, or just want to try the pipeline without creating any
 accounts, choose **local mode** instead.
 
 **The choice is made once, during Step 3 (`/sdlc-workspace-init`).** Phase 0
 of the wizard asks where artifacts should live:
 
-- **Notion + Linear** (default) — the flow described throughout this guide.
-- **Local files** — no Notion, no Linear, no accounts. The wizard skips the
-  Linear team, Notion home page, docs database, and template ID questions
-  entirely, and the MCP connectivity checks for Notion and Linear don't run.
+- **Notion + Jira/Linear** (default) — the flow described throughout this guide.
+- **Local files** — no Notion, no Jira/Linear, no accounts. The wizard skips the
+  Jira/Linear team, Notion home page, docs database, and template ID questions
+  entirely, and the MCP connectivity checks for Notion and Jira/Linear don't run.
 
 In local mode, everything the pipeline generates is written as markdown
 under `.sdlc/features/<NNN-slug>/` in your workspace instead of to Notion
-pages and Linear issues:
+pages and Jira/Linear issues:
 
 ```
 .sdlc/features/001-health-check-endpoint/
@@ -259,7 +259,7 @@ pages and Linear issues:
 ```
 
 **Commit these files.** They are the specification, not a cache of one —
-there's no Notion page or Linear issue elsewhere holding the source of
+there's no Notion page or Jira/Linear issue elsewhere holding the source of
 truth.
 
 Every skill runs the same way in either mode: the same clarifying questions,
@@ -270,7 +270,7 @@ an ordinary re-run of the wizard leaves an already-set mode alone, so this
 flag is the deliberate way to reopen that choice. It re-runs Phase 0 and
 updates `sdlc.mode` in `.claude/settings.local.json`. Switching does **not**
 migrate anything: files already written to `.sdlc/` stay on disk, and pages
-already written to Notion or Linear stay there. Pick the mode you want at
+already written to Notion or Jira/Linear stay there. Pick the mode you want at
 the start of a feature, not partway through it.
 
 ## Skills Reference
@@ -281,7 +281,7 @@ Interactive setup wizard that configures `.claude/settings.local.json` and
 verifies MCP integration connectivity. **Run this first** when setting up a
 new project directory. Idempotent — only asks for missing values, always
 reports status. Also where you choose the artifact backend — Notion +
-Linear or local files — see [Local Mode](#local-mode-no-notion-no-linear).
+Jira/Linear or local files — see [Local Mode](#local-mode-no-notion-no-jiralinear).
 
 **Input:** None for a normal run (interactive wizard); optional `--switch-mode`
 flag to reopen the artifact store choice
@@ -342,7 +342,7 @@ and testing strategy.
 
 Accepts any source type:
 - **Scoping Doc** (Notion URL) — the standard pipeline path; also fetches the linked PRD
-- **Linear issue** (URL or `XXX-NNN`) — for work already tracked in Linear
+- **Jira/Linear issue** (URL or `XXX-NNN`) — for work already tracked in Jira/Linear
 - **Slack thread** (URL) — for designs discussed in Slack
 - **Notion page** (URL) — any Notion page with context
 - **Free text** — describe what needs to be built directly
@@ -351,7 +351,7 @@ Accepts any source type:
 The skill asks clarifying questions about affected repos, feature flags, Data
 UI Inventory (for frontend work), and GTM events before generating.
 
-**Input:** URL, Linear issue ID, or free text (see list above)
+**Input:** URL, Jira/Linear issue ID, or free text (see list above)
 **Output:** Notion page with up to 11 technical sections (some conditional on scope)
 **Validation gate:** When the source is a Scoping Doc with a linked PRD, stops if either document has unresolved `TBD`, `NEEDS HUMAN INPUT`, or open `OQ-x` items. Other source types skip this gate.
 
@@ -359,17 +359,17 @@ UI Inventory (for frontend work), and GTM events before generating.
 
 ### `/sdlc-generate-task-breakdown <Jot Down Notion URL>`
 
-Decomposes a Jot Down into Linear issues with PERT estimates, dependency
-sequencing, and critical path analysis. Asks the user to select a Linear
+Decomposes a Jot Down into Jira/Linear issues with PERT estimates, dependency
+sequencing, and critical path analysis. Asks the user to select a Jira/Linear
 project before creating any issues.
 
 **Input:** Notion URL of a completed Jot Down
-**Output:** Parent Linear issue (epic) + sub-issues with estimates and dependencies
+**Output:** Parent Jira/Linear issue (epic) + sub-issues with estimates and dependencies
 **Validation gate:** Stops if any source document (Jot Down, Scoping Doc, PRD) has unresolved items.
 
 ---
 
-### `/sdlc-implement-task <LINEAR-ID>`
+### `/sdlc-implement-task <JIRA/LINEAR-ID>`
 
 Orchestrates the autonomous coding loop. Spawns three agents in sequence:
 
@@ -377,7 +377,7 @@ Orchestrates the autonomous coding loop. Spawns three agents in sequence:
 2. **Test Agent** — Validates coverage, edge cases, lint, and test results. If failures are found, feeds back to the Coding Agent (up to 3 iterations)
 3. **Documentator Agent** — Updates README, API docs, inline docs, and changelog
 
-**Input:** Linear issue identifier (e.g. `YAL-123`)
+**Input:** Jira/Linear issue identifier (e.g. `YAL-123`)
 **Output:** Git branch with code, tests, and docs ready for human review
 
 ---
@@ -445,17 +445,17 @@ Agents enforce these limits and abort if they would be violated.
 | Integration | Type | Purpose |
 |-------------|------|---------|
 | Notion | Claude built-in integration | Read/write documents |
-| Linear | Claude built-in integration | Read/write issues |
+| Jira/Linear | Claude built-in integration | Read/write issues |
 | Figma  | Claude built-in integration | Read design files |
 | Playwright | Local (bundled in plugin) | Browser automation |
 
-Notion, Linear, and Figma are Claude built-in integrations -- enable them in
+Notion, Jira/Linear, and Figma are Claude built-in integrations -- enable them in
 your Claude Code settings and authenticate via OAuth when prompted. Playwright
 is bundled as a local MCP server inside the plugin and runs via `npx`. It
 auto-downloads browser binaries on first use (~150 MB, no auth needed).
 
-Notion and Linear apply to remote mode only -- local mode needs neither. See
-[Local Mode](#local-mode-no-notion-no-linear).
+Notion and Jira/Linear apply to remote mode only -- local mode needs neither. See
+[Local Mode](#local-mode-no-notion-no-jiralinear).
 
 ## Keeping Repos in Sync
 
@@ -483,10 +483,10 @@ No file copying or backup steps required.
 ## Troubleshooting
 
 **Marketplace not found error**
-If you see `Marketplace "TextraAI-sdlc" not found`, try using the full GitHub URL instead:
+If you see `Marketplace "ai-sdlc" not found`, try using the full GitHub URL instead:
 
 ```
-/plugin marketplace add https://github.com/TextraAI/ai-sdlc
+/plugin marketplace add https://github.com/dbianco/ai-sdlc
 ```
 
 Then exit and restart Claude Code before installing the plugin.
@@ -498,7 +498,7 @@ it again with `claude`. Then run `/plugin marketplace list` or `/plugin list`
 to verify.
 
 **MCP integration not connected**
-Run `/mcp` and re-authenticate. OAuth tokens can expire. For Notion, Linear,
+Run `/mcp` and re-authenticate. OAuth tokens can expire. For Notion, Jira/Linear,
 and Figma, make sure you have enabled the built-in integrations in your Claude
 Code settings.
 
@@ -509,7 +509,7 @@ try running `npx @playwright/mcp@latest` manually to see the error.
 
 **Skills not showing up**
 Verify the plugin is installed: run `/plugin list` and check that
-`sdlc@TextraAI-sdlc` appears. If not, re-run the install commands from
+`sdlc@ai-sdlc` appears. If not, re-run the install commands from
 Step 2.
 
 **Plugin or marketplace stuck on an old version**
@@ -517,12 +517,12 @@ Force a clean reinstall by removing and re-adding:
 
 ```
 # Force update the marketplace
-/plugin marketplace remove TextraAI-sdlc
-/plugin marketplace add TextraAI/ai-sdlc
+/plugin marketplace remove ai-sdlc
+/plugin marketplace add dbianco/ai-sdlc
 
 # Exit and restart Claude Code, then force update the plugin
 /plugin uninstall sdlc
-/plugin install sdlc@TextraAI-sdlc
+/plugin install sdlc@ai-sdlc
 ```
 
 Exit and restart Claude Code after each step to ensure changes take effect.
@@ -534,22 +534,22 @@ Code configuration and redo Step 2:
 ```bash
 # 1. Remove everything
 /plugin uninstall sdlc
-/plugin marketplace remove TextraAI-sdlc
+/plugin marketplace remove ai-sdlc
 
 # 2. Exit Claude Code
 /exit
 
 # 3. Delete any cached plugin data
 rm -rf ~/.claude/plugins/sdlc
-rm -rf ~/.claude/marketplace/TextraAI-sdlc
+rm -rf ~/.claude/marketplace/ai-sdlc
 
 # 4. Start Claude Code fresh and reinstall from Step 2
 claude
-/plugin marketplace add TextraAI/ai-sdlc
+/plugin marketplace add dbianco/ai-sdlc
 # Exit and restart
 /exit
 claude
-/plugin install sdlc@TextraAI-sdlc
+/plugin install sdlc@ai-sdlc
 # Exit and restart
 /exit
 claude
@@ -570,6 +570,6 @@ the skill.
 
 ## Getting Help
 
-- Plugin issues: file in the `TextraAI/ai-sdlc` repo
+- Plugin issues: file in the `dbianco/ai-sdlc` repo
 - Skill bugs: include the skill name and error output
 - Setup problems: include your OS version and Claude Code version

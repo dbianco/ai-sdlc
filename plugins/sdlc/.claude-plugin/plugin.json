@@ -1,16 +1,17 @@
 {
   "name": "sdlc",
-  "description": "TextraAI's AI-powered Software Development Lifecycle — document generation, task breakdown, and autonomous coding pipeline",
+  "description": "An AI-powered Software Development Lifecycle — document generation, task breakdown, and autonomous coding pipeline",
   "version": "2.0.0",
   "author": {
     "name": "Daniel Oliva",
     "email": "olivabianco@gmail.com"
   },
-  "repository": "https://github.com/TextraAI/ai-sdlc",
+  "repository": "https://github.com/dbianco/ai-sdlc",
   "license": "MIT",
   "keywords": [
     "sdlc",
     "prd",
+    "jira",
     "linear",
     "notion",
     "code-generation"

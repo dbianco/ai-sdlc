@@ -1,5 +1,0 @@
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-namespace: ai-sdlc-wide
-generators:
-- ../../../../values/sdlc-metrics-mcp/envs/production/wide
